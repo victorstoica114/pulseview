@@ -26,6 +26,7 @@
 #endif
 
 #include <deque>
+#include <atomic>
 #include <functional>
 #include <map>
 #include <memory>
@@ -183,8 +184,13 @@ public:
 			map<string, Glib::VariantBase>());
 
 	capture_state get_capture_state() const;
+	QString capture_outcome() const;
+	QString capture_error() const;
+	bool device_needs_reconnect() const;
 	void start_capture(function<void (const QString)> error_handler);
 	void stop_capture();
+	void request_stop_capture();
+	bool stop_requested() const;
 
 	double get_samplerate() const;
 	Glib::DateTime get_acquisition_start_time() const;
@@ -290,6 +296,9 @@ private:
 
 	mutable mutex sampling_mutex_; //!< Protects access to capture_state_
 	capture_state capture_state_;
+	bool stop_requested_; //!< Protected by sampling_mutex_
+	QString capture_outcome_, capture_error_;
+	std::atomic_bool device_reconnect_needed_{false};
 
 	vector< shared_ptr<data::SignalBase> > signalbases_;
 	unordered_set< shared_ptr<data::SignalData> > all_signal_data_;

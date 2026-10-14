@@ -315,9 +315,10 @@ void MainBar::set_capture_state(pv::Session::capture_state state)
 	bool ui_enabled = (state == pv::Session::Stopped) ? true : false;
 
 	device_selector_.setEnabled(ui_enabled);
+	ui_enabled = ui_enabled && !session_.device_needs_reconnect();
 	configure_button_.setEnabled(ui_enabled);
 	channels_button_.setEnabled(ui_enabled);
-	sample_count_.setEnabled(ui_enabled);
+	sample_count_.setEnabled(ui_enabled && !continuous_sampling_enabled());
 	sample_rate_.setEnabled(ui_enabled);
 }
 
@@ -459,6 +460,27 @@ void MainBar::update_sample_rate_selector_value()
 	}
 }
 
+bool MainBar::continuous_sampling_enabled()
+{
+	const auto device = device_selector_.selected_device();
+	if (!device)
+		return false;
+	const auto sr_dev = device->device();
+	// A writable boolean denotes active continuous mode. A read-only
+	// capability on other drivers is not an active-mode setting.
+	if (!sr_dev->config_check(ConfigKey::CONTINUOUS, Capability::GET) ||
+		!sr_dev->config_check(ConfigKey::CONTINUOUS, Capability::SET))
+		return false;
+	try {
+		auto value = sr_dev->config_get(ConfigKey::CONTINUOUS);
+		return value.gobj() && g_variant_is_of_type(value.gobj(),
+			G_VARIANT_TYPE_BOOLEAN) && g_variant_get_boolean(value.gobj());
+	} catch (const Error &error) {
+		qWarning() << tr("Failed to query continuous sampling:") << error.what();
+		return false;
+	}
+}
+
 void MainBar::update_sample_count_selector()
 {
 	if (updating_sample_count_)
@@ -473,11 +495,13 @@ void MainBar::update_sample_count_selector()
 	assert(!updating_sample_count_);
 	updating_sample_count_ = true;
 
-	if (!sample_count_supported_) {
+	if (!sample_count_supported_ || continuous_sampling_enabled()) {
 		sample_count_.show_none();
+		sample_count_.setEnabled(false);
 		updating_sample_count_ = false;
 		return;
 	}
+	sample_count_.setEnabled(session_.get_capture_state() == Session::Stopped);
 
 	uint64_t sample_count = sample_count_.value();
 	uint64_t min_sample_count = 0;
@@ -607,7 +631,7 @@ void MainBar::commit_sample_count()
 	const shared_ptr<sigrok::Device> sr_dev = device->device();
 
 	sample_count = sample_count_.value();
-	if (sample_count_supported_) {
+	if (sample_count_supported_ && !continuous_sampling_enabled()) {
 		try {
 			sr_dev->config_set(ConfigKey::LIMIT_SAMPLES,
 				Glib::Variant<guint64>::create(sample_count));
@@ -617,6 +641,11 @@ void MainBar::commit_sample_count()
 			return;
 		}
 	}
+
+	// Continuous mode owns its zero sample limit. Do not replace it with
+	// a stale finite toolbar value when a configuration control changes.
+	if (continuous_sampling_enabled())
+		update_sample_count_selector();
 
 	// Devices with built-in memory might impose limits on certain
 	// configurations, so let's check what sample rate the driver
@@ -784,6 +813,8 @@ void MainBar::on_device_changed()
 {
 	update_device_list();
 	update_device_config_widgets();
+	// A fresh device can clear reconnect without another capture-state transition.
+	set_capture_state(session_.get_capture_state());
 }
 
 void MainBar::on_capture_state_changed(int state)
@@ -805,6 +836,9 @@ void MainBar::on_sample_rate_changed()
 
 void MainBar::on_config_changed()
 {
+	// Read back mode/limits before committing the toolbar's finite value.
+	// Turning continuous mode off must also restore its hidden selector.
+	update_sample_count_selector();
 	// We want to also call update_sample_rate_selector() here in case
 	// the user changed the SR_CONF_EXTERNAL_CLOCK option. However,
 	// commit_sample_rate() does this already, so we don't call it here

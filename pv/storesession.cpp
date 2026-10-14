@@ -184,6 +184,13 @@ bool StoreSession::start()
 			{{ConfigKey::SAMPLERATE, Glib::Variant<guint64>::create(
 				any_segment->samplerate())}});
 		output_->receive(meta);
+		// Save the outcome of these samples, not a newly selected device state.
+		if (!session_.capture_outcome().isEmpty()) {
+			auto outcome = context->create_meta_packet({
+				{ConfigKey::CAPTURE_STATUS, Glib::Variant<Glib::ustring>::create(session_.capture_outcome().toStdString())},
+				{ConfigKey::CAPTURE_ERROR, Glib::Variant<Glib::ustring>::create(session_.capture_error().toStdString())}});
+			output_->receive(outcome);
+		}
 
 		auto header = context->create_header_packet(session_.get_acquisition_start_time());
 		output_->receive(header);

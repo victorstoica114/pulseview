@@ -113,6 +113,7 @@ private:
 	void update_sample_rate_selector();
 	void update_sample_rate_selector_value();
 	void update_sample_count_selector();
+	bool continuous_sampling_enabled();
 	void update_device_config_widgets();
 	void commit_sample_rate();
 	void commit_sample_count();
