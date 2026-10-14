@@ -376,5 +376,8 @@ int main(int argc, char *argv[])
 
 	} while (false);
 
+	// Unregister while the global settings registry is still alive.
+	// The static logger destructor must not access a destroyed vector.
+	pv::logging.shutdown();
 	return ret;
 }
