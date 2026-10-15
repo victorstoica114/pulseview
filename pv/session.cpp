@@ -835,11 +835,6 @@ void Session::start_capture(function<void (const QString)> error_handler)
 		error_handler(tr("Device disconnected. Reconnect USB, then use Connect to Device, Scan, and select the analyzer again."));
 		return;
 	}
-	{
-		lock_guard<recursive_mutex> lock(data_mutex_);
-		capture_outcome_.clear();
-		capture_error_.clear();
-	}
 	const shared_ptr<sigrok::Device> sr_dev = device_->device();
 	if (sr_dev) {
 		const auto channels = sr_dev->channels();
@@ -851,6 +846,13 @@ void Session::start_capture(function<void (const QString)> error_handler)
 		}
 	}
 
+	// Outcome and samples describe the same acquisition. A rejected start
+	// must preserve both until a new acquisition replaces them.
+	{
+		lock_guard<recursive_mutex> lock(data_mutex_);
+		capture_outcome_.clear();
+		capture_error_.clear();
+	}
 	// Clear signal data
 	for (const shared_ptr<data::SignalData>& d : all_signal_data_)
 		d->clear();
