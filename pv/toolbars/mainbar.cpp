@@ -466,6 +466,8 @@ bool MainBar::continuous_sampling_enabled()
 	if (!device)
 		return false;
 	const auto sr_dev = device->device();
+	if (!sr_dev)
+		return false;
 	// A writable boolean denotes active continuous mode. A read-only
 	// capability on other drivers is not an active-mode setting.
 	if (!sr_dev->config_check(ConfigKey::CONTINUOUS, Capability::GET) ||
