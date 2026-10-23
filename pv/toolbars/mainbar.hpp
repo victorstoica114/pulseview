@@ -23,6 +23,7 @@
 #include <cstdint>
 #include <list>
 #include <memory>
+#include <vector>
 
 #include <glibmm/variant.h>
 
@@ -31,6 +32,7 @@
 #include <QMenu>
 #include <QToolBar>
 #include <QToolButton>
+#include <QTimer>
 
 #include <pv/session.hpp>
 #include <pv/views/trace/standardbar.hpp>
@@ -132,6 +134,8 @@ private Q_SLOTS:
 	void on_sample_rate_changed();
 
 	void on_config_changed();
+	void on_channels_changed();
+	void refresh_channel_config();
 
 	void on_actionNewView_triggered(QAction* action = nullptr);
 
@@ -183,6 +187,8 @@ private:
 	bool updating_sample_count_;
 
 	bool sample_count_supported_;
+	QTimer channel_config_timer_;
+	std::vector<QMetaObject::Connection> channel_connections_;
 
 #ifdef ENABLE_DECODE
 	QToolButton *add_decoder_button_;

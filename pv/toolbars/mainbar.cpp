@@ -111,6 +111,7 @@ MainBar::MainBar(Session &session, QWidget *parent, pv::views::trace::View *view
 	updating_sample_rate_(false),
 	updating_sample_count_(false),
 	sample_count_supported_(false),
+	channel_config_timer_(this),
 #ifdef ENABLE_DECODE
 	add_decoder_button_(new QToolButton()),
 #endif
@@ -291,6 +292,10 @@ MainBar::MainBar(Session &session, QWidget *parent, pv::views::trace::View *view
 		this, SLOT(on_capture_state_changed(int)));
 	connect(&session, SIGNAL(device_changed()),
 		this, SLOT(on_device_changed()));
+	channel_config_timer_.setSingleShot(true);
+	channel_config_timer_.setInterval(0);
+	connect(&channel_config_timer_, SIGNAL(timeout()),
+		this, SLOT(refresh_channel_config()));
 
 	update_device_list();
 }
@@ -394,6 +399,9 @@ void MainBar::update_sample_rate_selector()
 			gvar_dict = sr_dev->config_list(ConfigKey::SAMPLERATE);
 		} catch (Error& error) {
 			qDebug() << tr("Failed to get sample rate list:") << error.what();
+			sample_rate_.show_none();
+			updating_sample_rate_ = false;
+			return;
 		}
 	} else {
 		sample_rate_.show_none();
@@ -554,6 +562,10 @@ void MainBar::update_sample_count_selector()
 void MainBar::update_device_config_widgets()
 {
 	using namespace pv::popups;
+	channel_config_timer_.stop();
+	for (const auto &connection : channel_connections_)
+		disconnect(connection);
+	channel_connections_.clear();
 
 	const shared_ptr<devices::Device> device = device_selector_.selected_device();
 
@@ -569,6 +581,11 @@ void MainBar::update_device_config_widgets()
 	const shared_ptr<sigrok::Device> sr_dev = device->device();
 	if (!sr_dev)
 		return;
+	for (const auto &signal : session_.signalbases()) {
+		if (signal->channel())
+			channel_connections_.push_back(connect(signal.get(),
+				SIGNAL(enabled_changed(bool)), this, SLOT(on_channels_changed())));
+	}
 
 	// Update the configure popup
 	DeviceOptions *const opts = new DeviceOptions(sr_dev, this);
@@ -847,6 +864,40 @@ void MainBar::on_config_changed()
 
 	commit_sample_count();
 	commit_sample_rate();
+}
+
+void MainBar::on_channels_changed()
+{
+	// Bulk operations can temporarily disable every channel. Query limits
+	// once the whole operation has finished, rather than for each checkbox.
+	if (!channel_config_timer_.isActive())
+		channel_config_timer_.start();
+}
+
+void MainBar::refresh_channel_config()
+{
+	const auto device = device_selector_.selected_device();
+	if (!device || !device->device() || session_.device_needs_reconnect() ||
+			session_.get_capture_state() != Session::Stopped)
+		return;
+	bool any_enabled = false;
+	for (const auto &signal : session_.signalbases())
+		any_enabled |= signal->channel() && signal->enabled();
+	if (!any_enabled) {
+		sample_rate_.show_none();
+		sample_count_.show_none();
+		return;
+	}
+	update_sample_rate_selector();
+	// set_value() selects the nearest supported entry when the previous
+	// rate is now too high. Keep the driver and the toolbar in agreement.
+	if (sample_rate_.value() && device->device()->config_check(
+			ConfigKey::SAMPLERATE, Capability::SET))
+		commit_sample_rate();
+	else
+		update_sample_count_selector();
+	if (sample_count_.value())
+		commit_sample_count();
 }
 
 void MainBar::on_actionNewView_triggered(QAction* action)
