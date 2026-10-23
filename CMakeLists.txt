@@ -516,7 +516,7 @@ endif()
 
 if(WIN32)
 	# Use the sigrok icon for the pulseview.exe executable.
-	set(CMAKE_RC_COMPILE_OBJECT "${CMAKE_RC_COMPILER} -O coff -I${CMAKE_CURRENT_SOURCE_DIR} <SOURCE> <OBJECT>")
+	set(CMAKE_RC_COMPILE_OBJECT "\"${CMAKE_RC_COMPILER}\" -O coff -I\"${CMAKE_CURRENT_SOURCE_DIR}\" <SOURCE> <OBJECT>")
 	enable_language(RC)
 	list(APPEND pulseview_SOURCES pulseviewico.rc)
 endif()
