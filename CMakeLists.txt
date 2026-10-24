@@ -338,6 +338,7 @@ set(pulseview_SOURCES
 	pv/mainwindow.cpp
 	pv/metadata_obj.cpp
 	pv/session.cpp
+	pv/triggersettings.cpp
 	pv/storesession.cpp
 	pv/util.cpp
 	pv/binding/binding.cpp

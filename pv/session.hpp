@@ -82,6 +82,7 @@ class Option;
 class OutputFormat;
 class Packet;
 class Session;
+class Trigger;
 }  // namespace sigrok
 
 using sigrok::Option;
@@ -138,6 +139,7 @@ public:
 	const DeviceManager& device_manager() const;
 
 	shared_ptr<sigrok::Session> session() const;
+	void set_trigger(shared_ptr<sigrok::Trigger> trigger);
 
 	shared_ptr<devices::Device> device() const;
 
@@ -266,6 +268,7 @@ Q_SIGNALS:
 	void name_changed();
 
 	void trigger_event(int segment_id, util::Timestamp location);
+	void trigger_changed();
 
 	void new_segment(int new_segment_id);
 	void segment_completed(int segment_id);

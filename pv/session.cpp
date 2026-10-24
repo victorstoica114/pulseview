@@ -31,6 +31,7 @@
 #include "devicemanager.hpp"
 #include "mainwindow.hpp"
 #include "session.hpp"
+#include "triggersettings.hpp"
 #include "util.hpp"
 
 #include "data/analog.hpp"
@@ -166,6 +167,14 @@ shared_ptr<devices::Device> Session::device() const
 	return device_;
 }
 
+void Session::set_trigger(shared_ptr<sigrok::Trigger> trigger)
+{
+	if (!session())
+		return;
+	session()->set_trigger(std::move(trigger));
+	trigger_changed();
+}
+
 QString Session::name() const
 {
 	return name_;
@@ -221,6 +230,7 @@ bool Session::data_saved() const
 
 void Session::save_setup(QSettings &settings) const
 {
+	save_trigger_settings(settings, session());
 	int i;
 	int decode_signal_count = 0;
 	int gen_signal_count = 0;
@@ -381,6 +391,16 @@ void Session::restore_setup(QSettings &settings)
 		settings.beginGroup(base->internal_name());
 		base->restore_settings(settings);
 		settings.endGroup();
+	}
+
+	if (session() && device_ && device_->device()) {
+		try {
+			if (restore_trigger_settings(settings, device_manager_.context(),
+					device_->device(), session()))
+				trigger_changed();
+		} catch (const std::exception &error) {
+			qWarning() << tr("Failed to restore trigger:") << error.what();
+		}
 	}
 
 	// Restore generated signals
