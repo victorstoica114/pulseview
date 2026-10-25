@@ -43,10 +43,12 @@
 #include <pv/dialogs/connect.hpp>
 #include <pv/dialogs/inputoutputoptions.hpp>
 #include <pv/dialogs/storeprogress.hpp>
+#include <pv/dialogs/triggereditor.hpp>
 #include <pv/mainwindow.hpp>
 #include <pv/popups/channels.hpp>
 #include <pv/popups/deviceoptions.hpp>
 #include <pv/util.hpp>
+#include <pv/triggersequence.hpp>
 #include <pv/views/trace/view.hpp>
 #include <pv/widgets/exportmenu.hpp>
 #include <pv/widgets/importmenu.hpp>
@@ -106,6 +108,8 @@ MainBar::MainBar(Session &session, QWidget *parent, pv::views::trace::View *view
 	configure_button_action_(nullptr),
 	channels_button_(this),
 	channels_button_action_(nullptr),
+	trigger_button_(this),
+	trigger_button_action_(nullptr),
 	sample_count_(" samples", this),
 	sample_rate_("Hz", this),
 	updating_sample_rate_(false),
@@ -281,6 +285,12 @@ MainBar::MainBar(Session &session, QWidget *parent, pv::views::trace::View *view
 
 	channels_button_.setToolTip(tr("Configure Channels"));
 	channels_button_.setIcon(QIcon(":/icons/channels.svg"));
+	trigger_button_.setObjectName("triggerSequenceButton");
+	trigger_button_.setText(tr("Trigger..."));
+	trigger_button_.setToolTip(tr("Edit trigger stages and channel conditions"));
+	trigger_button_.setIcon(QIcon(":/icons/trigger-rising.svg"));
+	trigger_button_.setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+	connect(&trigger_button_, &QToolButton::clicked, this, &MainBar::on_edit_trigger);
 
 	add_toolbar_widgets();
 
@@ -292,6 +302,7 @@ MainBar::MainBar(Session &session, QWidget *parent, pv::views::trace::View *view
 		this, SLOT(on_capture_state_changed(int)));
 	connect(&session, SIGNAL(device_changed()),
 		this, SLOT(on_device_changed()));
+	connect(&session_, &Session::trigger_changed, this, &MainBar::update_trigger_button);
 	channel_config_timer_.setSingleShot(true);
 	channel_config_timer_.setInterval(0);
 	connect(&channel_config_timer_, SIGNAL(timeout()),
@@ -323,6 +334,7 @@ void MainBar::set_capture_state(pv::Session::capture_state state)
 	ui_enabled = ui_enabled && !session_.device_needs_reconnect();
 	configure_button_.setEnabled(ui_enabled);
 	channels_button_.setEnabled(ui_enabled);
+	trigger_button_.setEnabled(ui_enabled);
 	sample_count_.setEnabled(ui_enabled && !continuous_sampling_enabled());
 	sample_rate_.setEnabled(ui_enabled);
 }
@@ -571,6 +583,8 @@ void MainBar::update_device_config_widgets()
 
 	// Hide the widgets if no device is selected
 	channels_button_action_->setVisible(!!device);
+	trigger_button_action_->setVisible(false);
+	update_trigger_button();
 	if (!device) {
 		configure_button_action_->setVisible(false);
 		sample_count_.show_none();
@@ -581,6 +595,11 @@ void MainBar::update_device_config_widgets()
 	const shared_ptr<sigrok::Device> sr_dev = device->device();
 	if (!sr_dev)
 		return;
+	try {
+		trigger_button_action_->setVisible(!trigger_match_types(sr_dev).empty());
+	} catch (const std::exception &e) {
+		qWarning() << "Cannot list trigger conditions:" << e.what();
+	}
 	for (const auto &signal : session_.signalbases()) {
 		if (signal->channel())
 			channel_connections_.push_back(connect(signal.get(),
@@ -1011,6 +1030,41 @@ void MainBar::on_add_math_signal_clicked()
 	session_.add_generated_signal(signal);
 }
 
+void MainBar::update_trigger_button()
+{
+	const auto trigger = session_.session() ? session_.session()->trigger() : nullptr;
+	const auto count = trigger ? trigger->stages().size() : 0;
+	trigger_button_.setText(count > 1 ? tr("Trigger (%1)...").arg(static_cast<qulonglong>(count)) :
+		tr("Trigger..."));
+}
+
+void MainBar::on_edit_trigger()
+{
+	if (session_.get_capture_state() != Session::Stopped || session_.device_needs_reconnect())
+		return;
+	const auto selected = session_.device();
+	if (!selected || !selected->device() || !session_.session())
+		return;
+	const auto device = selected->device();
+	const auto original = session_.session()->trigger();
+	try {
+		dialogs::TriggerEditor editor(session_.device_manager().context(), device, original, this);
+		connect(&session_, &Session::device_changed, &editor, &QDialog::reject);
+		connect(&session_, &Session::capture_state_changed, &editor, [&editor](int state) {
+			if (state != Session::Stopped) editor.reject();
+		});
+		if (editor.exec() != QDialog::Accepted)
+			return;
+		if (session_.get_capture_state() != Session::Stopped || session_.device_needs_reconnect() ||
+				session_.device() != selected || !session_.session() ||
+				session_.session()->trigger() != original)
+			throw std::runtime_error("The capture device or trigger changed. Reopen the trigger editor.");
+		session_.set_trigger(editor.trigger());
+	} catch (const std::exception &e) {
+		show_session_error(tr("Cannot configure trigger"), QString::fromUtf8(e.what()));
+	}
+}
+
 void MainBar::add_toolbar_widgets()
 {
 	addWidget(new_view_button_);
@@ -1024,6 +1078,7 @@ void MainBar::add_toolbar_widgets()
 	addWidget(&device_selector_);
 	configure_button_action_ = addWidget(&configure_button_);
 	channels_button_action_ = addWidget(&channels_button_);
+	trigger_button_action_ = addWidget(&trigger_button_);
 	addWidget(&sample_count_);
 	addWidget(&sample_rate_);
 #ifdef ENABLE_DECODE

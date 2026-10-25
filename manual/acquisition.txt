@@ -102,13 +102,12 @@ The signal labels on the left side of the view (D0, D1 and so on in the picture 
 configure certain aspects of these signals. If the device supports it then the trigger that will be
 used for this signal will be among them.
 
-As of now, the trigger system is awaiting extension for advanced and complex trigger types, meaning
-that the only triggers available to you are:
+The channel popup provides the following basic conditions, when supported by the device:
 
 * Trigger when the signal has a "low" level
 * Trigger when the signal has a "high" level
 * Trigger when the signal switches from "low" to "high" level (rising edge)
-* Trigger when the signal switches from "hig" to "low" level (falling edge)
+* Trigger when the signal switches from "high" to "low" level (falling edge)
 * Trigger when the signal changes level in any way (any edge)
 
 Once you choose a trigger, the icon for the type you chose becomes visible on the right side of the
@@ -118,6 +117,36 @@ When you click "Run" with a trigger configured, PulseView will wait for the devi
 send data before it can show anything. There is currently no frame limit, so if the device driver
 supports it, PulseView will continue arming the trigger and collecting data until you either click
 "Stop" or it runs out of memory.
+
+==== Trigger sequences
+
+While acquisition is stopped, click *Trigger...* in the toolbar to edit an entire
+trigger. Enable the trigger, add a stage and add one or more channel conditions.
+All conditions within a stage must match; stages are evaluated in their listed
+order. For example, one stage can match a bus pattern and the next can wait for
+an edge on another channel. The device must support that combination.
+
+Select a stage to edit its conditions. *Add stage*, *Duplicate*, *Move up*,
+*Move down* and *Remove stage* change the sequence. Channel choices use physical
+input indices and enabled inputs. A channel can appear in different stages,
+but only once within any individual stage. Analog channels offer the supported
+conditions and a threshold field; leave the field blank if a threshold is not
+required. Use a decimal point for threshold values.
+
+The editor keeps changes separate until *OK*. Invalid or empty enabled stages
+cannot be accepted. *Cancel* retains the previous trigger. To remove a trigger,
+clear *Enable trigger* and accept. Session setup files save and restore the
+stage order, channel conditions, trigger name and threshold values.
+
+For a sequence with multiple stages, use this editor rather than the individual
+channel popup. The popup's basic controls become read-only so that an existing
+sequence is preserved. The toolbar shows the number of stages.
+
+The editor does not add trigger features to a device. Drivers can limit stage
+and condition counts and reject unsupported configurations when acquisition
+starts. Hardware timing, counters and protocol-specific trigger parameters
+require corresponding driver and configuration support; this editor represents
+the level/edge stages and channel conditions available through libsigrok.
 
 === Channel Groups
 

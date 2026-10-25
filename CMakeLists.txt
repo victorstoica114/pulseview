@@ -339,6 +339,7 @@ set(pulseview_SOURCES
 	pv/metadata_obj.cpp
 	pv/session.cpp
 	pv/triggersettings.cpp
+	pv/triggersequence.cpp
 	pv/storesession.cpp
 	pv/util.cpp
 	pv/binding/binding.cpp
@@ -361,6 +362,7 @@ set(pulseview_SOURCES
 	pv/dialogs/inputoutputoptions.cpp
 	pv/dialogs/settings.cpp
 	pv/dialogs/storeprogress.cpp
+	pv/dialogs/triggereditor.cpp
 	pv/popups/deviceoptions.cpp
 	pv/popups/channels.cpp
 	pv/prop/bool.cpp
@@ -430,6 +432,7 @@ set(pulseview_HEADERS
 	pv/dialogs/inputoutputoptions.hpp
 	pv/dialogs/settings.hpp
 	pv/dialogs/storeprogress.hpp
+	pv/dialogs/triggereditor.hpp
 	pv/popups/channels.hpp
 	pv/popups/deviceoptions.hpp
 	pv/prop/bool.hpp

@@ -549,19 +549,21 @@ void LogicSignal::populate_popup_form(QWidget *parent, QFormLayout *form)
 			action->setChecked(trigger_match_ == type);
 		}
 
-		// Only allow triggers to be changed when we're stopped
-		if (session_.get_capture_state() != Session::Stopped)
-			for (QAction* action : trigger_bar_->findChildren<QAction*>())  // clazy:exclude=range-loop
-				action->setEnabled(false);
-
 		form->addRow(tr("Trigger"), trigger_bar_);
+		trigger_sequence_hint_ = new QLabel(tr("Use the Trigger button in the toolbar to edit this sequence."), parent);
+		trigger_sequence_hint_->setWordWrap(true);
+		form->addRow(trigger_sequence_hint_);
+		on_session_trigger_changed();
 	}
 }
 
 void LogicSignal::modify_trigger()
 {
 	auto trigger = session_.session()->trigger();
-	auto new_trigger = session_.device_manager().context()->create_trigger("pulseview");
+	if (trigger && trigger->stages().size() > 1)
+		return;
+	auto new_trigger = session_.device_manager().context()->create_trigger(
+		trigger ? trigger->name() : "pulseview");
 
 	if (trigger) {
 		for (auto stage : trigger->stages()) {
@@ -575,7 +577,7 @@ void LogicSignal::modify_trigger()
 			for (auto match : stage->matches()) {
 				if (match->channel() == base_->channel())
 					continue;
-				new_stage->add_match(match->channel(), match->type());
+				new_stage->add_match(match->channel(), match->type(), match->value());
 			}
 		}
 	}
@@ -641,17 +643,23 @@ void LogicSignal::on_setting_changed(const QString &key, const QVariant &value)
 void LogicSignal::on_session_trigger_changed()
 {
 	trigger_match_ = nullptr;
-	if (session_.session())
-		if (auto trigger = session_.session()->trigger())
-			for (const auto &stage : trigger->stages())
-				for (const auto &match : stage->matches())
-					if (match->channel() == base_->channel())
-						trigger_match_ = match->type();
+	const auto trigger = session_.session() ? session_.session()->trigger() : nullptr;
+	const bool sequence = trigger && trigger->stages().size() > 1;
+	if (trigger && !sequence)
+		for (const auto &stage : trigger->stages())
+			for (const auto &match : stage->matches())
+				if (match->channel() == base_->channel())
+					trigger_match_ = match->type();
+	if (trigger_sequence_hint_)
+		trigger_sequence_hint_->setVisible(sequence);
+	if (trigger_bar_)
+		trigger_bar_->setEnabled(!sequence && session_.get_capture_state() == Session::Stopped &&
+			!session_.device_needs_reconnect());
 	if (trigger_none_) {
 		const auto selected = action_from_trigger_type(trigger_match_);
 		for (auto action : {trigger_none_, trigger_low_, trigger_high_,
 				trigger_rising_, trigger_falling_, trigger_change_})
-			action->setChecked(action == selected);
+			if (action) action->setChecked(action == selected);
 	}
 	if (owner_)
 		owner_->row_item_appearance_changed(false, true);
@@ -659,6 +667,12 @@ void LogicSignal::on_session_trigger_changed()
 
 void LogicSignal::on_trigger()
 {
+	if (session_.session())
+		if (auto trigger = session_.session()->trigger())
+			if (trigger->stages().size() > 1) {
+				on_session_trigger_changed();
+				return;
+			}
 	QAction *action;
 
 	action_from_trigger_type(trigger_match_)->setChecked(false);

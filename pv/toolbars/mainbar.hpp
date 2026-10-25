@@ -117,6 +117,7 @@ private:
 	void update_sample_count_selector();
 	bool continuous_sampling_enabled();
 	void update_device_config_widgets();
+	void update_trigger_button();
 	void commit_sample_rate();
 	void commit_sample_count();
 
@@ -151,6 +152,7 @@ private Q_SLOTS:
 
 	void on_add_decoder_clicked();
 	void on_add_math_signal_clicked();
+	void on_edit_trigger();
 
 protected:
 	void add_toolbar_widgets();
@@ -180,6 +182,8 @@ private:
 
 	pv::widgets::PopupToolButton channels_button_;
 	QAction *channels_button_action_;
+	QToolButton trigger_button_;
+	QAction *trigger_button_action_;
 
 	pv::widgets::SweepTimingWidget sample_count_;
 	pv::widgets::SweepTimingWidget sample_rate_;

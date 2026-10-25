@@ -21,8 +21,11 @@
 #define PULSEVIEW_PV_VIEWS_TRACE_LOGICSIGNAL_HPP
 
 #include <QCache>
+#include <QAction>
 #include <QColor>
 #include <QDebug>
+#include <QLabel>
+#include <QPointer>
 #include <QSpinBox>
 
 #include "signal.hpp"
@@ -144,13 +147,14 @@ protected:
 
 	const sigrok::TriggerMatchType *trigger_match_;
 	const vector<int32_t> trigger_types_;
-	QToolBar *trigger_bar_;
-	QAction *trigger_none_;
-	QAction *trigger_rising_;
-	QAction *trigger_high_;
-	QAction *trigger_falling_;
-	QAction *trigger_low_;
-	QAction *trigger_change_;
+	QPointer<QToolBar> trigger_bar_;
+	QPointer<QLabel> trigger_sequence_hint_;
+	QPointer<QAction> trigger_none_;
+	QPointer<QAction> trigger_rising_;
+	QPointer<QAction> trigger_high_;
+	QPointer<QAction> trigger_falling_;
+	QPointer<QAction> trigger_low_;
+	QPointer<QAction> trigger_change_;
 
 	static QCache<QString, const QIcon> icon_cache_;
 	static QCache<QString, const QPixmap> pixmap_cache_;
