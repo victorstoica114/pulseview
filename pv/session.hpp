@@ -89,6 +89,8 @@ using sigrok::Option;
 
 namespace pv {
 
+struct HardwareTriggerOptions;
+
 class DeviceManager;
 
 namespace data {
@@ -140,6 +142,8 @@ public:
 
 	shared_ptr<sigrok::Session> session() const;
 	void set_trigger(shared_ptr<sigrok::Trigger> trigger);
+	void set_trigger(shared_ptr<sigrok::Trigger> trigger, const HardwareTriggerOptions &options);
+	bool has_extended_trigger() const;
 
 	shared_ptr<devices::Device> device() const;
 

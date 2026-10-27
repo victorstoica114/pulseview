@@ -560,7 +560,7 @@ void LogicSignal::populate_popup_form(QWidget *parent, QFormLayout *form)
 void LogicSignal::modify_trigger()
 {
 	auto trigger = session_.session()->trigger();
-	if (trigger && trigger->stages().size() > 1)
+	if ((trigger && trigger->stages().size() > 1) || session_.has_extended_trigger())
 		return;
 	auto new_trigger = session_.device_manager().context()->create_trigger(
 		trigger ? trigger->name() : "pulseview");
@@ -644,7 +644,7 @@ void LogicSignal::on_session_trigger_changed()
 {
 	trigger_match_ = nullptr;
 	const auto trigger = session_.session() ? session_.session()->trigger() : nullptr;
-	const bool sequence = trigger && trigger->stages().size() > 1;
+	const bool sequence = (trigger && trigger->stages().size() > 1) || session_.has_extended_trigger();
 	if (trigger && !sequence)
 		for (const auto &stage : trigger->stages())
 			for (const auto &match : stage->matches())
@@ -667,6 +667,10 @@ void LogicSignal::on_session_trigger_changed()
 
 void LogicSignal::on_trigger()
 {
+	if (session_.has_extended_trigger()) {
+		on_session_trigger_changed();
+		return;
+	}
 	if (session_.session())
 		if (auto trigger = session_.session()->trigger())
 			if (trigger->stages().size() > 1) {

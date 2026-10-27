@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 #include "triggersettings.hpp"
+#include "triggersequence.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -13,7 +14,8 @@
 namespace pv {
 
 void save_trigger_settings(QSettings &settings,
-	const std::shared_ptr<sigrok::Session> &session)
+	const std::shared_ptr<sigrok::Session> &session,
+	const std::shared_ptr<sigrok::Device> &device)
 {
 	if (!session)
 		return;
@@ -41,6 +43,12 @@ void save_trigger_settings(QSettings &settings,
 		}
 	}
 	settings.setValue("trigger/stages", stages);
+	if (hardware_trigger_supported(device)) {
+		auto value = encode_hardware_trigger(read_hardware_trigger(device));
+		char *text = g_variant_print(value.gobj(), TRUE);
+		settings.setValue("trigger/hardware", QString::fromUtf8(text));
+		g_free(text);
+	} else settings.remove("trigger/hardware");
 }
 
 bool restore_trigger_settings(QSettings &settings,
@@ -56,8 +64,20 @@ bool restore_trigger_settings(QSettings &settings,
 	const QString enabled = settings.value("trigger/enabled").toString();
 	if (enabled != "true" && enabled != "false")
 		throw std::runtime_error("Invalid trigger enabled state.");
+	HardwareTriggerOptions options;
+	if (settings.contains("trigger/hardware")) {
+		const auto text = settings.value("trigger/hardware").toString().toUtf8();
+		if (text.size() > 65536) throw std::runtime_error("Hardware trigger setup is too large.");
+		GError *error = nullptr;
+		auto *raw = g_variant_parse(G_VARIANT_TYPE_VARDICT, text.constData(), nullptr, nullptr, &error);
+		if (!raw) {
+			g_clear_error(&error);
+			throw std::runtime_error("Invalid hardware trigger setup.");
+		}
+		options = parse_hardware_trigger(Glib::VariantBase(raw));
+	}
 	if (enabled == "false") {
-		session->set_trigger(nullptr);
+		apply_trigger_configuration(session, device, nullptr, options);
 		return true;
 	}
 	const auto stages = settings.value("trigger/stages").toList();
@@ -101,7 +121,7 @@ bool restore_trigger_settings(QSettings &settings,
 		}
 	}
 	// All stages have been validated before changing the live session.
-	session->set_trigger(next);
+	apply_trigger_configuration(session, device, next, options);
 	return true;
 }
 

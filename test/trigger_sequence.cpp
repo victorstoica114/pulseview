@@ -10,6 +10,7 @@
 #include <QComboBox>
 #include <QDialogButtonBox>
 #include <QEvent>
+#include <QFormLayout>
 #include <QLineEdit>
 #include <QListWidget>
 #include <QPushButton>
@@ -20,6 +21,9 @@
 #include <pv/dialogs/triggereditor.hpp>
 #include <pv/triggersettings.hpp>
 #include <pv/triggersequence.hpp>
+#include <pv/devicemanager.hpp>
+#include <pv/session.hpp>
+#include <pv/views/trace/logicsignal.hpp>
 
 namespace {
 void application()
@@ -94,6 +98,66 @@ void check_same(const pv::TriggerSequence &a, const pv::TriggerSequence &b)
 }
 
 BOOST_AUTO_TEST_SUITE(TriggerSequence)
+
+BOOST_AUTO_TEST_CASE(channel_name_restore_after_popup_destruction)
+{
+	Fixture f;
+	pv::DeviceManager manager(f.context, "", false);
+	pv::Session session(manager, "popup lifetime");
+	auto base = std::make_shared<pv::data::SignalBase>(f.device->channels()[0], pv::data::SignalBase::LogicChannel);
+	pv::views::trace::LogicSignal signal(session, base);
+	{
+		QWidget popup;
+		auto *form = new QFormLayout(&popup);
+		static_cast<pv::views::trace::Signal &>(signal).populate_popup_form(&popup, form);
+		signal.set_name("Before close");
+	}
+	// Session setup restoration emits name_changed after the popup is gone.
+	base->set_name("Restored name");
+	signal.set_name("Renamed without popup");
+	BOOST_CHECK_EQUAL(base->name().toStdString(), "Renamed without popup");
+}
+
+BOOST_AUTO_TEST_CASE(hardware_options_roundtrip_and_boundaries)
+{
+	pv::HardwareTriggerOptions options;
+	options.mode = "parallel"; options.stages = {{1, false}, {255, true}};
+	auto copy = pv::parse_hardware_trigger(pv::encode_hardware_trigger(options));
+	BOOST_REQUIRE_EQUAL(copy.stages.size(), 2);
+	BOOST_CHECK_EQUAL(copy.stages[1].count, 255); BOOST_CHECK(copy.stages[1].continuous);
+	for (const unsigned int count : {0U, 256U}) {
+		options.stages[0].count = count;
+		BOOST_CHECK_THROW(pv::parse_hardware_trigger(pv::encode_hardware_trigger(options)), std::runtime_error);
+	}
+	options = {}; options.mode = "serial"; options.clock = 17; options.data = 18;
+	options.bits = 16; options.value = 0xa55a; options.falling = true;
+	copy = pv::parse_hardware_trigger(pv::encode_hardware_trigger(options));
+	BOOST_CHECK_EQUAL(copy.value, 0xa55a); BOOST_CHECK(copy.falling);
+	options.bits = 8;
+	BOOST_CHECK_THROW(pv::parse_hardware_trigger(pv::encode_hardware_trigger(options)), std::runtime_error);
+	options.bits = 16; options.data = options.clock;
+	BOOST_CHECK_THROW(pv::parse_hardware_trigger(pv::encode_hardware_trigger(options)), std::runtime_error);
+}
+
+BOOST_AUTO_TEST_CASE(unsupported_hardware_restore_preserves_live_trigger)
+{
+	Fixture f;
+	const auto original = pv::build_trigger_sequence(f.context, f.device, f.sequence());
+	f.session->set_trigger(original);
+	QTemporaryDir directory;
+	QSettings settings(directory.filePath("extended.ini"), QSettings::IniFormat);
+	pv::save_trigger_settings(settings, f.session, f.device);
+	settings.setValue("trigger/enabled", false);
+	settings.setValue("trigger/hardware", "{'mode': <'serial'>, 'clock': <uint32 0>, 'data': <uint32 1>, 'edge': <'rising'>, 'bits': <uint32 8>, 'value': <uint32 165>}");
+	BOOST_CHECK_THROW(pv::restore_trigger_settings(settings, f.context, f.device, f.session), std::exception);
+	BOOST_CHECK(f.session->trigger() == original);
+	settings.setValue("trigger/hardware", "{'mode': <'serial'>}");
+	BOOST_CHECK_THROW(pv::restore_trigger_settings(settings, f.context, f.device, f.session), std::exception);
+	BOOST_CHECK(f.session->trigger() == original);
+	pv::dialogs::TriggerEditor editor(f.context, f.device, original);
+	BOOST_CHECK_EQUAL(editor.hardware_options().mode, "default");
+	BOOST_CHECK(widget<QComboBox>(editor, "triggerMode")->isHidden());
+}
 
 BOOST_AUTO_TEST_CASE(physical_indices_stage_order_and_values)
 {

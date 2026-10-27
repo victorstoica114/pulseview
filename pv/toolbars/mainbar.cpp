@@ -1034,6 +1034,11 @@ void MainBar::update_trigger_button()
 {
 	const auto trigger = session_.session() ? session_.session()->trigger() : nullptr;
 	const auto count = trigger ? trigger->stages().size() : 0;
+	if (session_.device() && session_.device()->device() &&
+			read_hardware_trigger(session_.device()->device()).mode == "serial") {
+		trigger_button_.setText(tr("Trigger (serial)..."));
+		return;
+	}
 	trigger_button_.setText(count > 1 ? tr("Trigger (%1)...").arg(static_cast<qulonglong>(count)) :
 		tr("Trigger..."));
 }
@@ -1048,6 +1053,7 @@ void MainBar::on_edit_trigger()
 	const auto device = selected->device();
 	const auto original = session_.session()->trigger();
 	try {
+		const auto original_options = encode_hardware_trigger(read_hardware_trigger(device));
 		dialogs::TriggerEditor editor(session_.device_manager().context(), device, original, this);
 		connect(&session_, &Session::device_changed, &editor, &QDialog::reject);
 		connect(&session_, &Session::capture_state_changed, &editor, [&editor](int state) {
@@ -1057,9 +1063,10 @@ void MainBar::on_edit_trigger()
 			return;
 		if (session_.get_capture_state() != Session::Stopped || session_.device_needs_reconnect() ||
 				session_.device() != selected || !session_.session() ||
-				session_.session()->trigger() != original)
+				session_.session()->trigger() != original ||
+				!g_variant_equal(original_options.gobj(), encode_hardware_trigger(read_hardware_trigger(device)).gobj()))
 			throw std::runtime_error("The capture device or trigger changed. Reopen the trigger editor.");
-		session_.set_trigger(editor.trigger());
+		session_.set_trigger(editor.trigger(), editor.hardware_options());
 	} catch (const std::exception &e) {
 		show_session_error(tr("Cannot configure trigger"), QString::fromUtf8(e.what()));
 	}

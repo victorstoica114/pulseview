@@ -6,14 +6,38 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <glibmm/variant.h>
 
 namespace sigrok {
 class Context;
 class Device;
 class Trigger;
+class Session;
 }
 
 namespace pv {
+
+struct TriggerQualifier {
+	unsigned int count = 1;
+	bool continuous = false;
+};
+
+struct HardwareTriggerOptions {
+	std::string mode = "default";
+	std::vector<TriggerQualifier> stages;
+	unsigned int clock = 0, data = 1, bits = 8, value = 0;
+	bool falling = false;
+};
+
+bool hardware_trigger_supported(const std::shared_ptr<sigrok::Device> &device);
+HardwareTriggerOptions read_hardware_trigger(const std::shared_ptr<sigrok::Device> &device);
+HardwareTriggerOptions parse_hardware_trigger(const Glib::VariantBase &value);
+Glib::VariantBase encode_hardware_trigger(const HardwareTriggerOptions &options);
+void validate_hardware_trigger(const std::shared_ptr<sigrok::Device> &device,
+	const std::shared_ptr<sigrok::Trigger> &trigger, const HardwareTriggerOptions &options);
+void apply_trigger_configuration(const std::shared_ptr<sigrok::Session> &session,
+	const std::shared_ptr<sigrok::Device> &device,
+	const std::shared_ptr<sigrok::Trigger> &trigger, const HardwareTriggerOptions &options);
 
 struct TriggerCondition {
 	TriggerCondition(unsigned int channel, int type,

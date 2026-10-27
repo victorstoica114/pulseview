@@ -23,6 +23,7 @@
 #include <memory>
 
 #include <QComboBox>
+#include <QPointer>
 #include <QString>
 #include <QVariant>
 #include <QWidgetAction>
@@ -110,7 +111,7 @@ protected Q_SLOTS:
 protected:
 	pv::Session &session_;
 
-	QComboBox *name_widget_;
+	QPointer<QComboBox> name_widget_;
 };
 
 } // namespace trace

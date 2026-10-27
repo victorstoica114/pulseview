@@ -14,7 +14,8 @@ class Session;
 namespace pv {
 
 void save_trigger_settings(QSettings &settings,
-	const std::shared_ptr<sigrok::Session> &session);
+	const std::shared_ptr<sigrok::Session> &session,
+	const std::shared_ptr<sigrok::Device> &device = nullptr);
 
 /* Returns false for legacy setups without trigger settings. Invalid settings
  * throw before replacing the current trigger; an explicit disabled trigger

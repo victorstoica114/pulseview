@@ -9,6 +9,8 @@
 #include <pv/triggersequence.hpp>
 
 class QCheckBox;
+class QComboBox;
+class QSpinBox;
 class QDialogButtonBox;
 class QLabel;
 class QLineEdit;
@@ -27,6 +29,7 @@ public:
 		const std::shared_ptr<sigrok::Device> &device,
 		const std::shared_ptr<sigrok::Trigger> &initial, QWidget *parent = nullptr);
 	std::shared_ptr<sigrok::Trigger> trigger() const;
+	HardwareTriggerOptions hardware_options() const;
 
 protected:
 	void accept() override;
@@ -38,7 +41,7 @@ private:
 		int type;
 		QString value;
 	};
-	using Stage = std::vector<Match>;
+	struct Stage : std::vector<Match> { TriggerQualifier qualifier; };
 	void rebuild(int selected);
 	void populate_conditions();
 	void update_validation();
@@ -60,6 +63,12 @@ private:
 	QDialogButtonBox *buttons_;
 	QPushButton *add_stage_, *remove_stage_, *duplicate_stage_, *up_, *down_;
 	QPushButton *add_match_, *remove_match_;
+	bool hardware_ = false;
+	QComboBox *mode_, *serial_clock_, *serial_data_, *serial_edge_;
+	QSpinBox *count_, *serial_bits_;
+	QCheckBox *continuous_;
+	QLineEdit *serial_value_;
+	QWidget *parallel_panel_, *serial_panel_, *qualifier_panel_;
 };
 
 }

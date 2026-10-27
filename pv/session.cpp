@@ -31,6 +31,7 @@
 #include "devicemanager.hpp"
 #include "mainwindow.hpp"
 #include "session.hpp"
+#include "triggersequence.hpp"
 #include "triggersettings.hpp"
 #include "util.hpp"
 
@@ -169,9 +170,19 @@ shared_ptr<devices::Device> Session::device() const
 
 void Session::set_trigger(shared_ptr<sigrok::Trigger> trigger)
 {
+	set_trigger(std::move(trigger), HardwareTriggerOptions());
+}
+
+bool Session::has_extended_trigger() const
+{
+	return device_ && read_hardware_trigger(device_->device()).mode != "default";
+}
+
+void Session::set_trigger(shared_ptr<sigrok::Trigger> trigger, const HardwareTriggerOptions &options)
+{
 	if (!session())
 		return;
-	session()->set_trigger(std::move(trigger));
+	apply_trigger_configuration(session(), device_->device(), trigger, options);
 	trigger_changed();
 }
 
@@ -230,7 +241,7 @@ bool Session::data_saved() const
 
 void Session::save_setup(QSettings &settings) const
 {
-	save_trigger_settings(settings, session());
+	save_trigger_settings(settings, session(), device_ ? device_->device() : nullptr);
 	int i;
 	int decode_signal_count = 0;
 	int gen_signal_count = 0;
@@ -1368,7 +1379,7 @@ void Session::sample_thread_proc(function<void (const QString)> error_handler)
 		return;
 	}
 
-	set_capture_state(device_->session()->trigger() ?
+	set_capture_state((device_->session()->trigger() || has_extended_trigger()) ?
 		AwaitingTrigger : Running);
 
 	try {

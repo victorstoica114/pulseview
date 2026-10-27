@@ -8,6 +8,121 @@
 
 namespace pv {
 
+bool hardware_trigger_supported(const std::shared_ptr<sigrok::Device> &device)
+{
+	return device && device->config_check(sigrok::ConfigKey::TRIGGER_OPTIONS, sigrok::Capability::GET) &&
+		device->config_check(sigrok::ConfigKey::TRIGGER_OPTIONS, sigrok::Capability::SET);
+}
+
+HardwareTriggerOptions parse_hardware_trigger(const Glib::VariantBase &value)
+{
+	HardwareTriggerOptions result;
+	auto owned = value;
+	auto *dict = owned.gobj();
+	const char *mode = nullptr, *edge = nullptr;
+	if (!dict || !g_variant_is_of_type(dict, G_VARIANT_TYPE_VARDICT) ||
+			!g_variant_lookup(dict, "mode", "&s", &mode))
+		throw std::runtime_error("Invalid hardware trigger options.");
+	result.mode = mode;
+	if (result.mode == "default" && g_variant_n_children(dict) == 1) return result;
+	if (result.mode == "parallel" && g_variant_n_children(dict) == 2) {
+		auto *stages = g_variant_lookup_value(dict, "stages", G_VARIANT_TYPE("a(ub)"));
+		if (!stages) throw std::runtime_error("Invalid trigger qualifiers.");
+		for (gsize i = 0; i < g_variant_n_children(stages); ++i) {
+			guint32 count; gboolean continuous;
+			g_variant_get_child(stages, i, "(ub)", &count, &continuous);
+			result.stages.push_back({count, !!continuous});
+		}
+		g_variant_unref(stages);
+		if (result.stages.empty() || result.stages.size() > 16)
+			throw std::runtime_error("Use one to sixteen trigger stages.");
+		for (const auto &stage : result.stages)
+			if (!stage.count || stage.count > 255)
+				throw std::runtime_error("Trigger Count must be between 1 and 255.");
+		return result;
+	}
+	if (result.mode == "serial" && g_variant_n_children(dict) == 6 &&
+			g_variant_lookup(dict, "clock", "u", &result.clock) &&
+			g_variant_lookup(dict, "data", "u", &result.data) &&
+			g_variant_lookup(dict, "edge", "&s", &edge) &&
+			g_variant_lookup(dict, "bits", "u", &result.bits) &&
+			g_variant_lookup(dict, "value", "u", &result.value) &&
+			(std::string(edge) == "rising" || std::string(edge) == "falling") &&
+			result.clock < 32 && result.data < 32 && result.clock != result.data &&
+			result.bits >= 1 && result.bits <= 16 && result.value < (1U << result.bits)) {
+		result.falling = std::string(edge) == "falling";
+		return result;
+	}
+	throw std::runtime_error("Invalid or unsupported hardware trigger options.");
+}
+
+Glib::VariantBase encode_hardware_trigger(const HardwareTriggerOptions &options)
+{
+	GVariantBuilder dict, stages;
+	g_variant_builder_init(&dict, G_VARIANT_TYPE_VARDICT);
+	g_variant_builder_add(&dict, "{sv}", "mode", g_variant_new_string(options.mode.c_str()));
+	if (options.mode == "parallel") {
+		g_variant_builder_init(&stages, G_VARIANT_TYPE("a(ub)"));
+		for (const auto &stage : options.stages)
+			g_variant_builder_add(&stages, "(ub)", stage.count, stage.continuous);
+		g_variant_builder_add(&dict, "{sv}", "stages", g_variant_builder_end(&stages));
+	} else if (options.mode == "serial") {
+		g_variant_builder_add(&dict, "{sv}", "clock", g_variant_new_uint32(options.clock));
+		g_variant_builder_add(&dict, "{sv}", "data", g_variant_new_uint32(options.data));
+		g_variant_builder_add(&dict, "{sv}", "edge", g_variant_new_string(options.falling ? "falling" : "rising"));
+		g_variant_builder_add(&dict, "{sv}", "bits", g_variant_new_uint32(options.bits));
+		g_variant_builder_add(&dict, "{sv}", "value", g_variant_new_uint32(options.value));
+	}
+	return Glib::VariantBase(g_variant_builder_end(&dict));
+}
+
+HardwareTriggerOptions read_hardware_trigger(const std::shared_ptr<sigrok::Device> &device)
+{
+	return hardware_trigger_supported(device) ?
+		parse_hardware_trigger(device->config_get(sigrok::ConfigKey::TRIGGER_OPTIONS)) : HardwareTriggerOptions();
+}
+
+void validate_hardware_trigger(const std::shared_ptr<sigrok::Device> &device,
+	const std::shared_ptr<sigrok::Trigger> &trigger, const HardwareTriggerOptions &options)
+{
+	parse_hardware_trigger(encode_hardware_trigger(options));
+	if (options.mode == "default") return;
+	if (!hardware_trigger_supported(device))
+		throw std::runtime_error("This device does not support hardware trigger options.");
+	if (options.mode == "parallel") {
+		if (!trigger || options.stages.size() != trigger->stages().size())
+			throw std::runtime_error("Each parallel trigger stage needs one Count setting.");
+	} else {
+		if (trigger) throw std::runtime_error("Serial and parallel triggers cannot be combined.");
+		for (const auto index : {options.clock, options.data}) {
+			bool found = false;
+			for (const auto &channel : device->channels())
+				if (channel->index() == index && channel->enabled() && channel->type()->id() == SR_CHANNEL_LOGIC)
+					found = true;
+			if (!found) throw std::runtime_error("Enable both serial trigger channels.");
+		}
+	}
+}
+
+void apply_trigger_configuration(const std::shared_ptr<sigrok::Session> &session,
+	const std::shared_ptr<sigrok::Device> &device,
+	const std::shared_ptr<sigrok::Trigger> &trigger, const HardwareTriggerOptions &options)
+{
+	if (!session) throw std::runtime_error("No capture session.");
+	validate_hardware_trigger(device, trigger, options);
+	const bool extended = hardware_trigger_supported(device);
+	Glib::VariantBase previous;
+	if (extended) {
+		previous = device->config_get(sigrok::ConfigKey::TRIGGER_OPTIONS);
+		device->config_set(sigrok::ConfigKey::TRIGGER_OPTIONS, encode_hardware_trigger(options));
+	}
+	try { session->set_trigger(trigger); }
+	catch (...) {
+		if (extended) device->config_set(sigrok::ConfigKey::TRIGGER_OPTIONS, previous);
+		throw;
+	}
+}
+
 bool trigger_match_allowed(int channel_type, int match_type)
 {
 	if (channel_type == SR_CHANNEL_LOGIC)

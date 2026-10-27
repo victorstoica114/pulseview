@@ -8,6 +8,7 @@
 #include <QComboBox>
 #include <QDialogButtonBox>
 #include <QEvent>
+#include <QFormLayout>
 #include <QHeaderView>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -15,6 +16,7 @@
 #include <QListWidget>
 #include <QLocale>
 #include <QPushButton>
+#include <QSpinBox>
 #include <QTableWidget>
 #include <QVBoxLayout>
 #include <libsigrokcxx/libsigrokcxx.hpp>
@@ -66,6 +68,8 @@ TriggerEditor::TriggerEditor(const std::shared_ptr<sigrok::Context> &context,
 					throw std::runtime_error("The trigger belongs to another device. Clear or restore it before editing.");
 	}
 	supported_ = trigger_match_types(device_);
+	hardware_ = hardware_trigger_supported(device_);
+	const auto options = read_hardware_trigger(device_);
 	const auto sequence = read_trigger_sequence(initial);
 	enabled_->setChecked(sequence.enabled);
 	name_->setText(QString::fromStdString(sequence.name));
@@ -76,6 +80,49 @@ TriggerEditor::TriggerEditor(const std::shared_ptr<sigrok::Context> &context,
 				std::isnan(match.value) ? QString() : QString::number(match.value, 'g',
 					std::numeric_limits<float>::max_digits10)});
 	}
+	if (options.mode == "parallel") {
+		if (options.stages.size() != stages_.size())
+			throw std::runtime_error("Trigger stage qualifiers do not match the sequence.");
+		for (size_t i = 0; i < stages_.size(); ++i) stages_[i].qualifier = options.stages[i];
+	}
+	if (options.mode == "serial") enabled_->setChecked(true);
+	mode_ = new QComboBox(this);
+	mode_->setObjectName("triggerMode");
+	mode_->addItems({tr("Parallel sequence"), tr("Serial word")});
+	mode_->setCurrentIndex(options.mode == "serial" ? 1 : 0);
+	mode_->setVisible(hardware_);
+	serial_panel_ = new QWidget(this);
+	auto *serial_form = new QFormLayout(serial_panel_);
+	serial_clock_ = new QComboBox(serial_panel_);
+	serial_data_ = new QComboBox(serial_panel_);
+	serial_edge_ = new QComboBox(serial_panel_);
+	serial_bits_ = new QSpinBox(serial_panel_);
+	serial_value_ = new QLineEdit(serial_panel_);
+	serial_clock_->setObjectName("serialClock"); serial_data_->setObjectName("serialData");
+	serial_edge_->setObjectName("serialEdge"); serial_bits_->setObjectName("serialBits");
+	serial_value_->setObjectName("serialValue");
+	for (const auto &channel : device_->channels()) {
+		if (channel->type()->id() != SR_CHANNEL_LOGIC) continue;
+		const QString label = QString::fromStdString(channel->name()) +
+			(channel->enabled() ? QString() : tr(" (disabled)"));
+		serial_clock_->addItem(label, channel->index());
+		serial_data_->addItem(label, channel->index());
+	}
+	serial_clock_->setCurrentIndex(serial_clock_->findData(options.clock));
+	serial_data_->setCurrentIndex(serial_data_->findData(options.data));
+	serial_edge_->addItems({tr("Rising edge"), tr("Falling edge")});
+	serial_edge_->setCurrentIndex(options.falling ? 1 : 0);
+	serial_bits_->setRange(1, 16); serial_bits_->setValue(options.bits);
+	serial_value_->setText(QString("0x%1").arg(options.value, 0, 16));
+	serial_value_->setToolTip(tr("Unsigned decimal or hexadecimal (0x). The value must fit the selected width."));
+	serial_form->addRow(tr("Clock channel"), serial_clock_);
+	serial_form->addRow(tr("Data channel"), serial_data_);
+	serial_form->addRow(tr("Sample on"), serial_edge_);
+	serial_form->addRow(tr("Word width (bits)"), serial_bits_);
+	serial_form->addRow(tr("Word value"), serial_value_);
+	auto *serial_help = new QLabel(tr("Match the most recent sampled bits, MSB first. "
+		"This compares a clocked word; it does not decode a protocol or use chip select. Buffer mode is required."), serial_panel_);
+	serial_help->setWordWrap(true); serial_form->addRow(serial_help);
 	conditions_->setColumnCount(3);
 	conditions_->setHorizontalHeaderLabels({tr("Channel"), tr("Condition"), tr("Threshold")});
 	conditions_->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
@@ -85,6 +132,7 @@ TriggerEditor::TriggerEditor(const std::shared_ptr<sigrok::Context> &context,
 	auto *layout = new QVBoxLayout(this);
 	auto *heading = new QHBoxLayout;
 	heading->addWidget(enabled_);
+	heading->addWidget(mode_);
 	heading->addWidget(new QLabel(tr("Name:"), this));
 	heading->addWidget(name_);
 	layout->addLayout(heading);
@@ -126,8 +174,22 @@ TriggerEditor::TriggerEditor(const std::shared_ptr<sigrok::Context> &context,
 	match_buttons->addWidget(remove_match_);
 	match_buttons->addStretch();
 	right->addLayout(match_buttons);
+	qualifier_panel_ = new QWidget(this);
+	auto *qualifiers = new QFormLayout(qualifier_panel_);
+	count_ = new QSpinBox(qualifier_panel_); count_->setRange(1, 255);
+	count_->setObjectName("triggerCount");
+	continuous_ = new QCheckBox(tr("Continuous"), qualifier_panel_);
+	continuous_->setObjectName("triggerContinuous");
+	qualifiers->addRow(tr("Count"), count_); qualifiers->addRow(continuous_);
+	auto *count_help = new QLabel(tr("For edges, Count selects the occurrence. For levels, Count is nominal time in ns. "
+		"Continuous requires uninterrupted matching time; otherwise matching time accumulates. "
+		"The timing of mixed edge/level conditions is experimental."), qualifier_panel_);
+	count_help->setWordWrap(true); qualifiers->addRow(count_help);
+	qualifier_panel_->setVisible(hardware_); right->addWidget(qualifier_panel_);
 	content->addLayout(right, 2);
-	layout->addLayout(content);
+	parallel_panel_ = new QWidget(this); parallel_panel_->setLayout(content);
+	layout->addWidget(parallel_panel_);
+	layout->addWidget(serial_panel_);
 	layout->addWidget(error_);
 	layout->addWidget(buttons_);
 	connect(buttons_, &QDialogButtonBox::accepted, this, &TriggerEditor::accept);
@@ -164,6 +226,22 @@ TriggerEditor::TriggerEditor(const std::shared_ptr<sigrok::Context> &context,
 	connect(down_, &QPushButton::clicked, this, [this] { move_stage(1); });
 	connect(add_match_, &QPushButton::clicked, this, &TriggerEditor::add_condition);
 	connect(remove_match_, &QPushButton::clicked, this, &TriggerEditor::remove_condition);
+	connect(mode_, static_cast<void(QComboBox::*)(int)>(&QComboBox::currentIndexChanged), this,
+		[this] { update_validation(); });
+	for (auto *field : {serial_clock_, serial_data_, serial_edge_})
+		connect(field, static_cast<void(QComboBox::*)(int)>(&QComboBox::currentIndexChanged), this,
+			[this] { update_validation(); });
+	connect(serial_bits_, static_cast<void(QSpinBox::*)(int)>(&QSpinBox::valueChanged), this,
+		[this] { update_validation(); });
+	connect(serial_value_, &QLineEdit::textChanged, this, [this] { update_validation(); });
+	connect(count_, static_cast<void(QSpinBox::*)(int)>(&QSpinBox::valueChanged), this, [this](int count) {
+		const int selected = stage_list_->currentRow();
+		if (!rebuilding_ && selected >= 0) { stages_[selected].qualifier.count = count; update_validation(); }
+	});
+	connect(continuous_, &QCheckBox::toggled, this, [this](bool continuous) {
+		const int selected = stage_list_->currentRow();
+		if (!rebuilding_ && selected >= 0) { stages_[selected].qualifier.continuous = continuous; update_validation(); }
+	});
 	rebuild(stages_.empty() ? -1 : 0);
 }
 
@@ -204,6 +282,8 @@ void TriggerEditor::populate_conditions()
 	const int selected = stage_list_->currentRow();
 	if (selected >= 0) {
 		const auto &stage = stages_.at(selected);
+		count_->setValue(stage.qualifier.count);
+		continuous_->setChecked(stage.qualifier.continuous);
 		conditions_->setRowCount(static_cast<int>(stage.size()));
 		for (size_t i = 0; i < stage.size(); ++i) {
 			const auto &match = stage[i];
@@ -306,7 +386,7 @@ std::shared_ptr<sigrok::Trigger> TriggerEditor::trigger() const
 	TriggerSequence sequence;
 	sequence.enabled = enabled_->isChecked();
 	sequence.name = name_->text().toStdString();
-	if (!sequence.enabled) return nullptr;
+	if (!sequence.enabled || (hardware_ && mode_->currentIndex() == 1)) return nullptr;
 	for (const auto &stage : stages_) {
 		sequence.stages.emplace_back();
 		for (const auto &match : stage) {
@@ -324,18 +404,51 @@ std::shared_ptr<sigrok::Trigger> TriggerEditor::trigger() const
 	return build_trigger_sequence(context_, device_, sequence);
 }
 
+HardwareTriggerOptions TriggerEditor::hardware_options() const
+{
+	HardwareTriggerOptions options;
+	if (!hardware_ || !enabled_->isChecked()) return options;
+	if (mode_->currentIndex() == 1) {
+		options.mode = "serial";
+		options.clock = serial_clock_->currentData().toUInt();
+		options.data = serial_data_->currentData().toUInt();
+		options.falling = serial_edge_->currentIndex() == 1;
+		options.bits = serial_bits_->value();
+		bool ok;
+		const auto text = serial_value_->text().trimmed();
+		options.value = text.toUInt(&ok, text.startsWith("0x", Qt::CaseInsensitive) ? 16 : 10);
+		if (!ok) throw std::runtime_error("Enter an unsigned decimal or hexadecimal serial word.");
+	} else {
+		bool qualified = false;
+		for (const auto &stage : stages_) {
+			options.stages.push_back(stage.qualifier);
+			qualified |= stage.qualifier.count != 1 || stage.qualifier.continuous;
+		}
+		if (qualified) options.mode = "parallel";
+		else options.stages.clear();
+		if (stages_.size() > 16) throw std::runtime_error("Use no more than sixteen trigger stages.");
+	}
+	validate_hardware_trigger(device_, trigger(), options);
+	return options;
+}
+
 void TriggerEditor::update_validation()
 {
 	if (rebuilding_) return;
 	bool valid = true;
-	try { trigger(); error_->clear(); }
+	try { trigger(); hardware_options(); error_->clear(); }
 	catch (const std::exception &e) { valid = false; error_->setText(QString::fromUtf8(e.what())); }
 	const bool enabled = enabled_->isChecked();
+	const bool serial = hardware_ && mode_->currentIndex() == 1;
+	parallel_panel_->setVisible(!serial); serial_panel_->setVisible(serial);
+	serial_panel_->setEnabled(enabled); mode_->setEnabled(enabled);
 	const int selected = stage_list_->currentRow();
-	name_->setEnabled(enabled);
+	qualifier_panel_->setEnabled(enabled && selected >= 0);
+	add_stage_->setEnabled(!hardware_ || stages_.size() < 16);
+	name_->setEnabled(enabled && !serial);
 	stage_list_->setEnabled(enabled);
 	conditions_->setEnabled(enabled);
-	duplicate_stage_->setEnabled(enabled && selected >= 0);
+	duplicate_stage_->setEnabled(enabled && selected >= 0 && (!hardware_ || stages_.size() < 16));
 	remove_stage_->setEnabled(enabled && selected >= 0);
 	up_->setEnabled(enabled && selected > 0);
 	down_->setEnabled(enabled && selected >= 0 && selected + 1 < static_cast<int>(stages_.size()));
@@ -346,7 +459,7 @@ void TriggerEditor::update_validation()
 
 void TriggerEditor::accept()
 {
-	try { trigger(); QDialog::accept(); }
+	try { trigger(); hardware_options(); QDialog::accept(); }
 	catch (const std::exception &e) { error_->setText(QString::fromUtf8(e.what())); }
 }
 
