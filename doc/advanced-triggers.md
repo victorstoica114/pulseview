@@ -1,9 +1,9 @@
-# Experimental hardware trigger controls
+# Hardware trigger controls
 
-The `advanced-trigger-controls` branch builds on the generic trigger sequence
-editor and adds optional Count/Continuous and clocked-word controls. Build it
-with the matching libsigrok `advanced-trigger-buffer` branch:
-<https://github.com/victorstoica114/libsigrok/tree/advanced-trigger-buffer>.
+This fork's `master` includes the generic trigger sequence editor and optional
+Count/Continuous and clocked-word controls. Build it with the matching
+libsigrok fork's `master`:
+<https://github.com/victorstoica114/libsigrok/tree/master>.
 The proposed `SR_CONF_TRIGGER_OPTIONS` API is not in upstream libsigrok yet.
 
 Stop capture and use **Trigger...** in the toolbar. Devices without the new
