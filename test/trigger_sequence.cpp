@@ -15,6 +15,7 @@
 #include <QListWidget>
 #include <QPushButton>
 #include <QSettings>
+#include <QSpinBox>
 #include <QTableWidget>
 #include <QTemporaryDir>
 #include <libsigrokcxx/libsigrokcxx.hpp>
@@ -24,6 +25,7 @@
 #include <pv/devicemanager.hpp>
 #include <pv/session.hpp>
 #include <pv/views/trace/logicsignal.hpp>
+#include <pv/prop/int.hpp>
 
 namespace {
 void application()
@@ -98,6 +100,47 @@ void check_same(const pv::TriggerSequence &a, const pv::TriggerSequence &b)
 }
 
 BOOST_AUTO_TEST_SUITE(TriggerSequence)
+
+BOOST_AUTO_TEST_CASE(unavailable_integer_control_recovers_without_reopening_form)
+{
+	application();
+	bool available = false;
+	unsigned int writes = 0;
+	guint64 current = 50;
+	auto getter = [&]() -> Glib::VariantBase {
+		if (!available) throw sigrok::Error(SR_ERR_NA);
+		return Glib::Variant<guint64>::create(current);
+	};
+	auto setter = [&](Glib::VariantBase value) {
+		current = g_variant_get_uint64(value.gobj()); ++writes;
+	};
+	QWidget parent;
+	int64_t upper = 90;
+	auto range = [&]() -> boost::optional<std::pair<int64_t, int64_t>> {
+		return std::make_pair<int64_t, int64_t>(1, int64_t(upper));
+	};
+	pv::prop::Int property("Capture ratio", "", "%",
+		std::make_pair<int64_t, int64_t>(0, 100), getter, setter, "", range);
+	auto *spin = qobject_cast<QSpinBox *>(property.get_widget(&parent, true));
+	BOOST_REQUIRE(spin);
+	BOOST_CHECK(!spin->isEnabled()); BOOST_CHECK_EQUAL(writes, 0);
+	BOOST_CHECK_EQUAL(spin->specialValueText().toStdString(), "Unavailable");
+	available = true; property.update_widget();
+	BOOST_CHECK(spin->isEnabled()); BOOST_CHECK_EQUAL(spin->value(), 50);
+	BOOST_CHECK_EQUAL(spin->minimum(), 1); BOOST_CHECK_EQUAL(spin->maximum(), 90);
+	BOOST_CHECK(spin->specialValueText().isEmpty());
+	BOOST_CHECK_EQUAL(writes, 0);
+	spin->setValue(75); BOOST_CHECK_EQUAL(current, 75); BOOST_CHECK_EQUAL(writes, 1);
+	available = false; property.update_widget();
+	BOOST_CHECK(!spin->isEnabled());
+	spin->setValue(80); BOOST_CHECK_EQUAL(writes, 1);
+	available = true; property.update_widget();
+	BOOST_CHECK(spin->isEnabled()); BOOST_CHECK_EQUAL(spin->value(), 75);
+	BOOST_CHECK_EQUAL(writes, 1);
+	upper = 60; property.update_widget();
+	BOOST_CHECK_EQUAL(spin->maximum(), 60); BOOST_CHECK_EQUAL(spin->value(), 60);
+	BOOST_CHECK_EQUAL(writes, 1); BOOST_CHECK_EQUAL(current, 75);
+}
 
 BOOST_AUTO_TEST_CASE(channel_name_restore_after_popup_destruction)
 {

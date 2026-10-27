@@ -10,6 +10,15 @@ Stop capture and use **Trigger...** in the toolbar. Devices without the new
 capability retain the generic parallel sequence editor. On DLA-32, Buffer mode
 is required for qualified parallel or serial triggers.
 
+A single unqualified stage with multiple channel conditions uses standard AND
+triggering and works in both Buffer and Stream with the matching DLA-32 driver.
+Multiple stages and Count/Continuous or serial matching still require Buffer.
+
+The pre-trigger capture-ratio control is disabled as **Unavailable** in Stream.
+Switching back to Buffer restores its value and its listed range, including
+when the configuration popup was originally opened in Stream. Refreshing the
+value or bounds does not write a clamped placeholder back to the device.
+
 - **Parallel sequence:** all conditions in a stage must match before advancing.
   Add, duplicate, remove or reorder up to 16 stages. Count/Continuous belong to
   the selected stage and follow it when duplicated or moved. Count is 1–255:
@@ -33,11 +42,15 @@ malformed hardware settings preserve the previous trigger and produce a warning.
 Legacy setups retain the existing ordinary-trigger behavior. Serial mode is
 shown on the toolbar and capture enters the awaiting-trigger state.
 
-Validation includes 31 offline test cases, production-object GUI checks with a
+Validation includes 32 offline test cases, production-object GUI checks with a
 DLA-32 on Windows/WCH, real Count and SPI-word captures, overflow rejection,
 Cancel, extended setup persistence and explicit disable. Hardware validation on
 Linux and calibrated trigger positioning remain outstanding. No precise
 synthetic trigger marker or waveform correction is added.
+
+The availability regression reproduces the former missing-control failure.
+Additional real DeviceOptions checks cover Stream-first construction, mode
+round trips, restored bounds and a successful ratio edit in Buffer.
 
 Restoring a setup after destroying a channel popup also has a regression check.
 Its name field is tracked with a Qt guarded pointer, so later name restoration

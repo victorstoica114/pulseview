@@ -21,6 +21,7 @@
 #define PULSEVIEW_PV_PROP_INT_HPP
 
 #include <utility>
+#include <functional>
 
 #include <boost/optional.hpp>
 
@@ -38,9 +39,11 @@ class Int : public Property
 	Q_OBJECT
 
 public:
+	using RangeGetter = std::function<boost::optional<pair<int64_t, int64_t>>()>;
 	Int(QString name, QString desc, QString suffix,
 		boost::optional< pair<int64_t, int64_t> > range,
-		Getter getter, Setter setter, QString special_value_text = "");
+		Getter getter, Setter setter, QString special_value_text = "",
+		RangeGetter range_getter = nullptr);
 
 	virtual ~Int() = default;
 
@@ -55,6 +58,7 @@ private Q_SLOTS:
 private:
 	const QString suffix_, special_value_text_;
 	const boost::optional< pair<int64_t, int64_t> > range_;
+	const RangeGetter range_getter_;
 
 	Glib::VariantBase value_;
 	QSpinBox *spin_box_;

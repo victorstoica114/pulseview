@@ -114,21 +114,21 @@ Device::Device(shared_ptr<sigrok::Configurable> configurable) :
 			break;
 
 		case SR_CONF_CAPTURE_RATIO: {
-			pair<int64_t, int64_t> limits(0, 100);
-			if (capabilities.count(Capability::LIST)) {
-				try {
-					auto range = configurable_->config_list(key);
+			auto range = [configurable, key, capabilities]() -> optional<pair<int64_t, int64_t>> {
+				pair<int64_t, int64_t> limits(0, 100);
+				if (capabilities.count(Capability::LIST)) {
+					auto range = configurable->config_list(key);
 					if (g_variant_is_of_type(range.gobj(), G_VARIANT_TYPE("(tt)"))) {
 						uint64_t minimum, maximum;
 						g_variant_get(range.gobj(), "(tt)", &minimum, &maximum);
 						if (minimum <= maximum && maximum <= 100)
 							limits = pair<int64_t, int64_t>(minimum, maximum);
 					}
-				} catch (const Error &e) {
-					qWarning() << "Cannot query capture ratio range" << e.what();
 				}
-			}
-			bind_int(descr, "", "%", limits, get, set);
+				return limits;
+			};
+			properties_.push_back(shared_ptr<Property>(new Int(
+				descr, "", "%", pair<int64_t, int64_t>(0, 100), get, set, "", range)));
 			break;
 		}
 
