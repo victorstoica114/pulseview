@@ -33,7 +33,6 @@ public:
 
 protected:
 	void accept() override;
-	bool eventFilter(QObject *object, QEvent *event) override;
 
 private:
 	struct Match {

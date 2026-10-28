@@ -7,7 +7,6 @@
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDialogButtonBox>
-#include <QEvent>
 #include <QFormLayout>
 #include <QHeaderView>
 #include <QHBoxLayout>
@@ -309,11 +308,9 @@ void TriggerEditor::populate_conditions()
 			conditions_->setCellWidget(static_cast<int>(i), 0, channels);
 			conditions_->setCellWidget(static_cast<int>(i), 1, types);
 			conditions_->setCellWidget(static_cast<int>(i), 2, value);
-			for (QWidget *field : {static_cast<QWidget *>(channels), static_cast<QWidget *>(types),
-					static_cast<QWidget *>(value)}) {
-				field->setProperty("triggerRow", static_cast<int>(i));
-				field->installEventFilter(this);
-			}
+			// QTableWidget tracks focus in its cell widgets. Forcing column 0
+			// on FocusIn fights that tracking and recursively moves focus
+			// between the channel and condition/threshold editors.
 			connect(channels, static_cast<void(QComboBox::*)(int)>(&QComboBox::currentIndexChanged), this,
 				[this, selected, i, channels] {
 					if (rebuilding_) return;
@@ -347,13 +344,6 @@ void TriggerEditor::move_stage(int delta)
 	if (i < 0 || next < 0 || next >= static_cast<int>(stages_.size())) return;
 	std::swap(stages_[i], stages_[next]);
 	rebuild(next);
-}
-
-bool TriggerEditor::eventFilter(QObject *object, QEvent *event)
-{
-	if (!rebuilding_ && event->type() == QEvent::FocusIn && object->property("triggerRow").isValid())
-		conditions_->setCurrentCell(object->property("triggerRow").toInt(), 0);
-	return QDialog::eventFilter(object, event);
 }
 
 void TriggerEditor::add_condition()

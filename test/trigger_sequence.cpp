@@ -362,6 +362,39 @@ BOOST_AUTO_TEST_CASE(editor_focus_selects_condition_for_removal)
 	BOOST_CHECK_EQUAL(editor.trigger()->stages()[0]->matches()[0]->channel()->index(), 31);
 }
 
+BOOST_AUTO_TEST_CASE(editor_visible_focus_preserves_condition_column)
+{
+	Fixture f;
+	pv::dialogs::TriggerEditor editor(f.context, f.device,
+		pv::build_trigger_sequence(f.context, f.device, f.sequence()));
+	// A hidden widget receiving a synthetic FocusIn misses Qt's item-view
+	// focus changes. Exercise the real focus chain, including column changes.
+	editor.move(2000, 100);
+	editor.show();
+	QApplication::setActiveWindow(&editor);
+	QApplication::processEvents();
+	auto *table = widget<QTableWidget>(editor, "triggerConditions");
+	for (int repeat = 0; repeat < 3; ++repeat)
+		for (int row : {1, 0})
+			for (int column : {1, 0, 1}) {
+				auto *field = table->cellWidget(row, column);
+				BOOST_REQUIRE(field);
+				field->setFocus(Qt::MouseFocusReason);
+				QApplication::processEvents();
+				BOOST_CHECK(QApplication::focusWidget() == field);
+				BOOST_CHECK_EQUAL(table->currentRow(), row);
+				BOOST_CHECK_EQUAL(table->currentColumn(), column);
+			}
+	widget<QListWidget>(editor, "triggerStages")->setCurrentRow(2);
+	auto *threshold = table->cellWidget(0, 2);
+	BOOST_REQUIRE(threshold);
+	threshold->setFocus(Qt::TabFocusReason);
+	QApplication::processEvents();
+	BOOST_CHECK(QApplication::focusWidget() == threshold);
+	BOOST_CHECK_EQUAL(table->currentColumn(), 2);
+	check_same(f.sequence(), pv::read_trigger_sequence(editor.trigger()));
+}
+
 BOOST_AUTO_TEST_CASE(editor_rejects_foreign_device_with_same_channel_indices)
 {
 	Fixture f;
