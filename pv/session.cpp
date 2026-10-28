@@ -451,16 +451,29 @@ void Session::restore_setup(QSettings &settings)
 
 	// Restore views
 	int views = settings.value("views").toInt();
+	vector<shared_ptr<views::ViewBase>> restored_views;
 
 	for (int i = 0; i < views; i++) {
 		settings.beginGroup("view" + QString::number(i));
 
+		shared_ptr<views::ViewBase> restored;
 		if (i > 0) {
-			views::ViewType type = (views::ViewType)settings.value("type").toInt();
-			add_view(type, this);
-			views_.back()->restore_settings(settings);
+			bool valid_type;
+			const int type = settings.value("type").toInt(&valid_type);
+			if (valid_type && type >= 0 && type < views::ViewTypeCount) {
+				const auto previous_size = views_.size();
+				add_view(static_cast<views::ViewType>(type), this);
+				if (views_.size() > previous_size)
+					restored = views_.back();
+			}
 		} else
-			main_view_->restore_settings(settings);
+			restored = main_view_;
+		if (restored)
+			restored->restore_settings(settings);
+		else
+			qWarning() << tr("Skipping unavailable view in session setup:") << i;
+		// Preserve setup indexes even when an optional view is unavailable.
+		restored_views.push_back(restored);
 
 		settings.endGroup();
 	}
@@ -473,8 +486,15 @@ void Session::restore_setup(QSettings &settings)
 
 		shared_ptr<views::ViewBase> vb;
 		shared_ptr<views::trace::View> tv;
-		if (settings.contains("assoc_view"))
-			vb = views_.at(settings.value("assoc_view").toInt());
+		if (settings.contains("assoc_view")) {
+			bool valid_index;
+			const int index = settings.value("assoc_view").toInt(&valid_index);
+			const auto &available = restored_views.empty() ? views_ : restored_views;
+			if (valid_index && index >= 0 && static_cast<size_t>(index) < available.size())
+				vb = available[index];
+			else
+				qWarning() << tr("Skipping invalid view reference in session setup.");
+		}
 
 		if (vb)
 			tv = dynamic_pointer_cast<views::trace::View>(vb);
@@ -1319,6 +1339,7 @@ shared_ptr<data::SignalBase> Session::signalbase_from_channel(
 }
 
 void Session::sample_thread_proc(function<void (const QString)> error_handler)
+try
 {
 	assert(error_handler);
 
@@ -1417,6 +1438,27 @@ void Session::sample_thread_proc(function<void (const QString)> error_handler)
 	if (!capture_problem.isEmpty())
 		Q_EMIT session_error_raised(tr("Capture incomplete"), capture_problem +
 			tr("\nThe received samples can be saved as a partial capture."));
+}
+catch (const std::exception &error)
+{
+	// Standard exceptions (including allocation/configuration failures) must
+	// not escape std::thread and terminate the entire application.
+	const QString problem = dynamic_cast<const bad_alloc *>(&error) ?
+		tr("Out of memory, acquisition stopped.") : QString::fromUtf8(error.what());
+	try {
+		if (device_)
+			device_->stop();
+	} catch (...) {
+		qWarning() << tr("Failed to stop acquisition after a capture error.");
+	}
+	{
+		lock_guard<recursive_mutex> lock(data_mutex_);
+		capture_outcome_ = "error";
+		capture_error_ = problem;
+		data_saved_ = false;
+	}
+	set_capture_state(Stopped);
+	error_handler(problem);
 }
 
 void Session::free_unused_memory()

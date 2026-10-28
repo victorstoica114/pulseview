@@ -42,7 +42,7 @@ malformed hardware settings preserve the previous trigger and produce a warning.
 Legacy setups retain the existing ordinary-trigger behavior. Serial mode is
 shown on the toolbar and capture enters the awaiting-trigger state.
 
-Validation includes 32 offline test cases, production-object GUI checks with a
+Validation includes 41 offline test cases, production-object GUI checks with a
 DLA-32 on Windows/WCH, real Count and SPI-word captures, overflow rejection,
 Cancel, extended setup persistence and explicit disable. Hardware validation on
 Linux and calibrated trigger positioning remain outstanding. No precise
@@ -55,3 +55,12 @@ round trips, restored bounds and a successful ratio edit in Buffer.
 Restoring a setup after destroying a channel popup also has a regression check.
 Its name field is tracked with a Qt guarded pointer, so later name restoration
 cannot access a deleted widget.
+
+Crash regressions use the production QApplication and actual visible-widget
+focus changes, including condition/threshold columns. Retired condition widgets
+are disconnected before deferred deletion so queued input cannot change a
+different condition or address a removed row. Session setup restoration skips
+unavailable views and invalid references while preserving marker indexes.
+Standard exceptions in the capture worker stop acquisition, report an error
+and preserve an unsaved error outcome instead of escaping the worker thread.
+The tests also cover popup destruction and failed/successful file exports.

@@ -277,6 +277,12 @@ void TriggerEditor::rebuild(int selected)
 void TriggerEditor::populate_conditions()
 {
 	rebuilding_ = true;
+	// Removing cell widgets schedules deferred deletion. Pending input must
+	// not call lambdas holding indexes into the previous stage/condition list.
+	for (int row = 0; row < conditions_->rowCount(); ++row)
+		for (int column = 0; column < conditions_->columnCount(); ++column)
+			if (auto *field = conditions_->cellWidget(row, column))
+				disconnect(field, nullptr, this, nullptr);
 	conditions_->setRowCount(0);
 	const int selected = stage_list_->currentRow();
 	if (selected >= 0) {

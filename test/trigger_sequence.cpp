@@ -2,6 +2,8 @@
 /* Real demo sessions and real Qt widgets; no physical device discovery. */
 #include "test/test.hpp"
 #include <boost/test/unit_test.hpp>
+#include <atomic>
+#include <chrono>
 #include <cmath>
 #include <limits>
 #include <stdexcept>
@@ -11,20 +13,32 @@
 #include <QDialogButtonBox>
 #include <QEvent>
 #include <QFormLayout>
+#include <QFile>
 #include <QLineEdit>
 #include <QListWidget>
 #include <QPushButton>
+#include <QPointer>
+#include <QKeyEvent>
 #include <QSettings>
+#include <QScreen>
 #include <QSpinBox>
 #include <QTableWidget>
 #include <QTemporaryDir>
+#include <thread>
 #include <libsigrokcxx/libsigrokcxx.hpp>
 #include <pv/dialogs/triggereditor.hpp>
+#include <pv/application.hpp>
+#include <pv/globalsettings.hpp>
 #include <pv/triggersettings.hpp>
 #include <pv/triggersequence.hpp>
 #include <pv/devicemanager.hpp>
+#include <pv/devices/device.hpp>
+#include <pv/devices/inputfile.hpp>
 #include <pv/session.hpp>
+#include <pv/storesession.hpp>
 #include <pv/views/trace/logicsignal.hpp>
+#include <pv/views/trace/view.hpp>
+#include <pv/views/trace/flag.hpp>
 #include <pv/prop/int.hpp>
 
 namespace {
@@ -33,7 +47,20 @@ void application()
 	static int argc = 1;
 	static char executable[] = "pulseview-test";
 	static char *argv[] = {executable, nullptr};
-	static QApplication app(argc, argv);
+	static QTemporaryDir settings_directory;
+	static Application app(argc, argv);
+	static const bool initialized = [&] {
+		QCoreApplication::setOrganizationName("PulseViewTests");
+		QCoreApplication::setApplicationName("CrashRecovery");
+		QSettings::setDefaultFormat(QSettings::IniFormat);
+		QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, settings_directory.path());
+		pv::GlobalSettings settings;
+		settings.setValue(pv::GlobalSettings::Key_General_Language, "en");
+		settings.save_internal_defaults();
+		settings.set_defaults_where_needed();
+		return true;
+	}();
+	(void)initialized;
 }
 
 struct Fixture {
@@ -369,7 +396,7 @@ BOOST_AUTO_TEST_CASE(editor_visible_focus_preserves_condition_column)
 		pv::build_trigger_sequence(f.context, f.device, f.sequence()));
 	// A hidden widget receiving a synthetic FocusIn misses Qt's item-view
 	// focus changes. Exercise the real focus chain, including column changes.
-	editor.move(2000, 100);
+	editor.move(QApplication::screens().back()->availableGeometry().topLeft() + QPoint(50, 50));
 	editor.show();
 	QApplication::setActiveWindow(&editor);
 	QApplication::processEvents();
@@ -404,6 +431,230 @@ BOOST_AUTO_TEST_CASE(editor_rejects_foreign_device_with_same_channel_indices)
 		{sigrok::ConfigKey::NUM_ANALOG_CHANNELS, Glib::Variant<gint32>::create(1)},
 	}).at(0);
 	BOOST_CHECK_THROW(pv::dialogs::TriggerEditor(f.context, other, original), std::runtime_error);
+}
+
+BOOST_AUTO_TEST_SUITE_END()
+
+BOOST_AUTO_TEST_SUITE(CrashRecovery)
+
+BOOST_AUTO_TEST_CASE(retired_condition_widgets_ignore_pending_input)
+{
+	Fixture f;
+	pv::dialogs::TriggerEditor editor(f.context, f.device,
+		pv::build_trigger_sequence(f.context, f.device, f.sequence()));
+	auto *table = widget<QTableWidget>(editor, "triggerConditions");
+	QPointer<QComboBox> retired = qobject_cast<QComboBox *>(table->cellWidget(1, 1));
+	BOOST_REQUIRE(retired);
+	// The input was queued before removing the row. Qt defers deleting its
+	// cell widgets, so it can still reach the previous condition control.
+	QApplication::postEvent(retired, new QKeyEvent(QEvent::KeyPress, Qt::Key_Down, Qt::NoModifier));
+	table->selectRow(1);
+	click(editor, "removeTriggerCondition");
+	BOOST_CHECK_NO_THROW(QApplication::processEvents());
+	BOOST_CHECK_EQUAL(editor.trigger()->stages()[0]->matches().size(), 1);
+	BOOST_CHECK_EQUAL(editor.trigger()->stages()[0]->matches()[0]->channel()->index(), 31);
+}
+
+BOOST_AUTO_TEST_CASE(retired_condition_widgets_cannot_edit_another_stage)
+{
+	Fixture f;
+	pv::dialogs::TriggerEditor editor(f.context, f.device,
+		pv::build_trigger_sequence(f.context, f.device, f.sequence()));
+	auto *table = widget<QTableWidget>(editor, "triggerConditions");
+	QPointer<QComboBox> retired = qobject_cast<QComboBox *>(table->cellWidget(0, 1));
+	BOOST_REQUIRE(retired);
+	widget<QListWidget>(editor, "triggerStages")->setCurrentRow(1);
+	BOOST_REQUIRE(retired); // Cell widgets are waiting for deferred deletion.
+	retired->setCurrentIndex(retired->findData(SR_TRIGGER_RISING));
+	check_same(f.sequence(), pv::read_trigger_sequence(editor.trigger()));
+}
+
+BOOST_AUTO_TEST_CASE(setup_with_invalid_view_reference_is_ignored)
+{
+	Fixture f;
+	pv::DeviceManager manager(f.context, "", false);
+	pv::Session session(manager, "invalid view setup");
+	QTemporaryDir directory;
+	QSettings settings(directory.filePath("views.ini"), QSettings::IniFormat);
+	settings.setValue("meta_objs", 1);
+	settings.setValue("meta_obj0/type", "time_marker");
+	for (const auto &index : {QVariant(-1), QVariant(1000), QVariant("invalid")}) {
+		settings.setValue("meta_obj0/assoc_view", index);
+		BOOST_CHECK_NO_THROW(session.restore_setup(settings));
+		BOOST_CHECK(settings.group().isEmpty());
+	}
+}
+
+BOOST_AUTO_TEST_CASE(setup_does_not_dereference_missing_views)
+{
+	Fixture f;
+	pv::DeviceManager manager(f.context, "", false);
+	pv::Session session(manager, "missing view setup");
+	QTemporaryDir directory;
+	QSettings settings(directory.filePath("views.ini"), QSettings::IniFormat);
+	settings.setValue("views", 2);
+	settings.setValue("view1/type", 0);
+	// No main view or add_view receiver exists, e.g. a removed optional view.
+	BOOST_CHECK_NO_THROW(session.restore_setup(settings));
+	BOOST_CHECK(session.views().empty());
+	BOOST_CHECK(settings.group().isEmpty());
+}
+
+BOOST_AUTO_TEST_CASE(setup_preserves_metadata_indexes_when_a_view_is_unavailable)
+{
+	Fixture f;
+	pv::DeviceManager manager(f.context, "", false);
+	pv::Session session(manager, "partial view setup");
+	// The first view creates the session's shared range/hover metadata,
+	// just as MainWindow does before constructing secondary views.
+	auto first = std::make_shared<pv::views::trace::View>(session, true);
+	session.register_view(first);
+	QObject::connect(&session, &pv::Session::add_view, &session,
+		[&](pv::views::ViewType, pv::Session *) {
+			session.register_view(std::make_shared<pv::views::trace::View>(session));
+		});
+	QTemporaryDir directory;
+	QSettings settings(directory.filePath("views.ini"), QSettings::IniFormat);
+	settings.setValue("views", 3);
+	settings.setValue("view1/type", 9999); // Optional view absent from this build.
+	settings.setValue("view2/type", static_cast<int>(pv::views::ViewTypeTrace));
+	settings.setValue("meta_objs", 3);
+	for (int index = 0; index < 3; ++index) {
+		const auto group = QString("meta_obj%1/").arg(index);
+		settings.setValue(group + "type", "time_marker");
+		settings.setValue(group + "assoc_view", index);
+		settings.setValue(group + "text", QString("view%1").arg(index));
+	}
+	BOOST_CHECK_NO_THROW(session.restore_setup(settings));
+	BOOST_REQUIRE_EQUAL(session.views().size(), 2);
+	auto second = std::dynamic_pointer_cast<pv::views::trace::View>(session.views()[1]);
+	BOOST_REQUIRE(second);
+	BOOST_REQUIRE_EQUAL(first->flags().size(), 1);
+	BOOST_REQUIRE_EQUAL(second->flags().size(), 1);
+	BOOST_CHECK_EQUAL(first->flags()[0]->get_text().toStdString(), "view0");
+	BOOST_CHECK_EQUAL(second->flags()[0]->get_text().toStdString(), "view2");
+	BOOST_CHECK(settings.group().isEmpty());
+}
+
+namespace {
+class FailingCaptureDevice : public pv::devices::Device {
+public:
+	enum Failure { Start, Run, Allocation, None } failure;
+	std::atomic<unsigned int> stops{0};
+	FailingCaptureDevice(Fixture &f, Failure value) : failure(value)
+	{
+		device_ = f.device;
+		session_ = f.session;
+	}
+	std::string full_name() const override { return "test capture failure"; }
+	std::string display_name(const pv::DeviceManager &) const override { return full_name(); }
+	void open() override {}
+	void close() override {}
+	void start() override
+	{
+		if (failure == Start) throw std::runtime_error("start failure");
+	}
+	void run() override
+	{
+		if (failure == Run) throw std::runtime_error("run failure");
+		if (failure == Allocation) throw std::bad_alloc();
+	}
+	void stop() override { ++stops; }
+};
+}
+
+BOOST_AUTO_TEST_CASE(capture_worker_reports_standard_exceptions)
+{
+	Fixture f;
+	pv::DeviceManager manager(f.context, "", false);
+	pv::Session session(manager, "capture exception");
+	auto device = std::make_shared<FailingCaptureDevice>(f, FailingCaptureDevice::Start);
+	session.set_device(device);
+	for (auto failure : {FailingCaptureDevice::Start, FailingCaptureDevice::Run,
+			FailingCaptureDevice::Allocation}) {
+		device->failure = failure;
+		std::atomic<bool> reported{false};
+		QString error;
+		session.start_capture([&](QString text) { error = text; reported = true; });
+		const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+		while (!reported && std::chrono::steady_clock::now() < deadline)
+			std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		BOOST_REQUIRE(reported.load());
+		session.stop_capture();
+		BOOST_CHECK(!error.isEmpty());
+		if (failure == FailingCaptureDevice::Allocation)
+			BOOST_CHECK(error.contains("Out of memory"));
+		BOOST_CHECK_EQUAL(session.get_capture_state(), pv::Session::Stopped);
+		BOOST_CHECK_EQUAL(session.capture_outcome().toStdString(), "error");
+		BOOST_CHECK(!session.capture_error().isEmpty());
+	}
+	BOOST_CHECK_EQUAL(device->stops.load(), 3);
+	// The same selected device can run again after the failure is reported.
+	device->failure = FailingCaptureDevice::None;
+	std::atomic<bool> unexpected_error{false};
+	session.start_capture([&](QString) { unexpected_error = true; });
+	session.stop_capture();
+	BOOST_CHECK(!unexpected_error.load());
+	BOOST_CHECK_EQUAL(session.get_capture_state(), pv::Session::Stopped);
+}
+
+BOOST_AUTO_TEST_CASE(trigger_notifications_after_popup_destruction)
+{
+	Fixture f;
+	pv::DeviceManager manager(f.context, "", false);
+	pv::Session session(manager, "popup notifications");
+	session.set_device(std::make_shared<FailingCaptureDevice>(f, FailingCaptureDevice::None));
+	auto base = std::make_shared<pv::data::SignalBase>(f.device->channels()[0], pv::data::SignalBase::LogicChannel);
+	pv::views::trace::LogicSignal signal(session, base);
+	for (int repeat = 0; repeat < 8; ++repeat) {
+		{
+			QWidget popup;
+			auto *form = new QFormLayout(&popup);
+			static_cast<pv::views::trace::Signal &>(signal).populate_popup_form(&popup, form);
+		}
+		// Session and channel notifications outlive the popup's controls.
+		BOOST_CHECK_NO_THROW(session.set_trigger(pv::build_trigger_sequence(f.context, f.device, f.sequence())));
+		BOOST_CHECK_NO_THROW(session.set_trigger(nullptr));
+		BOOST_CHECK_NO_THROW(base->set_name(QString("channel%1").arg(repeat)));
+	}
+}
+
+BOOST_AUTO_TEST_CASE(input_capture_and_failed_export_remain_usable)
+{
+	Fixture f;
+	pv::DeviceManager manager(f.context, "", false);
+	pv::Session session(manager, "file capture/export");
+	QTemporaryDir directory;
+	const QByteArray bytes(4096, '\x5a');
+	const auto source = directory.filePath("input.bin");
+	{
+		QFile input(source);
+		BOOST_REQUIRE(input.open(QIODevice::WriteOnly));
+		BOOST_REQUIRE_EQUAL(input.write(bytes), bytes.size());
+	}
+	session.set_device(std::make_shared<pv::devices::InputFile>(f.context, source.toStdString(),
+		f.context->input_formats().at("binary"), std::map<std::string, Glib::VariantBase>()));
+	QString error;
+	session.start_capture([&](QString message) { error = message; });
+	session.stop_capture();
+	BOOST_CHECK(error.isEmpty());
+	BOOST_CHECK_EQUAL(session.get_capture_state(), pv::Session::Stopped);
+	const auto format = f.context->output_formats().at("binary");
+	{
+		pv::StoreSession failed(directory.filePath("absent/output.bin").toStdString(), format, {}, {0, 0}, session);
+		BOOST_CHECK(!failed.start());
+		BOOST_CHECK(!failed.error().isEmpty());
+	}
+	const auto target = directory.filePath("output.bin");
+	{
+		pv::StoreSession saved(target.toStdString(), format, {}, {0, 0}, session);
+		BOOST_REQUIRE(saved.start());
+		saved.wait();
+		BOOST_CHECK(saved.error().isEmpty());
+	}
+	QFile result(target);
+	BOOST_REQUIRE(result.open(QIODevice::ReadOnly));
+	BOOST_CHECK(result.readAll() == bytes);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
