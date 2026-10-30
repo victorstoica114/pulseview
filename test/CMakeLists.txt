@@ -25,6 +25,7 @@ set(pulseview_TEST_SOURCES
 	${PROJECT_SOURCE_DIR}/pv/logging.cpp
 	${PROJECT_SOURCE_DIR}/pv/mainwindow.cpp
 	${PROJECT_SOURCE_DIR}/pv/metadata_obj.cpp
+	${PROJECT_SOURCE_DIR}/pv/capturecollection.cpp
 	${PROJECT_SOURCE_DIR}/pv/session.cpp
 	${PROJECT_SOURCE_DIR}/pv/triggersettings.cpp
 	${PROJECT_SOURCE_DIR}/pv/triggersequence.cpp

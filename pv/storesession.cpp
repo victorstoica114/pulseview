@@ -22,6 +22,9 @@
 #include "storesession.hpp"
 
 #include <QSettings>
+#include <QTemporaryDir>
+#include <QThread>
+#include <pv/capturecollection.hpp>
 
 #include <pv/data/analog.hpp>
 #include <pv/data/analogsegment.hpp>
@@ -61,12 +64,13 @@ StoreSession::StoreSession(const string &file_name,
 	const shared_ptr<OutputFormat> &output_format,
 	const map<string, VariantBase> &options,
 	const pair<uint64_t, uint64_t> sample_range,
-	const Session &session) :
+	const Session &session, uint32_t segment, bool collection, bool save_setup) :
 	file_name_(file_name),
 	output_format_(output_format),
 	options_(options),
 	sample_range_(sample_range),
 	session_(session),
+	segment_(segment), collection_(collection), save_setup_(save_setup),
 	interrupt_(false),
 	units_stored_(0),
 	unit_count_(0)
@@ -91,6 +95,24 @@ const QString& StoreSession::error() const
 
 bool StoreSession::start()
 {
+	if (session_.get_capture_state() != Session::Stopped) {
+		error_ = tr("Stop the capture before saving.");
+		return false;
+	}
+	if (collection_) {
+		if (output_format_->name() != "srzip" || sample_range_.first != sample_range_.second ||
+			!session_.captured_segment_count()) {
+			error_ = tr("A collection requires digital segments, not a selected range.");
+			return false;
+		}
+		for (const auto& signal : session_.signalbases())
+			if (signal->enabled() && signal->type() == data::SignalBase::AnalogChannel) {
+				error_ = tr("Capture collections currently support digital inputs only.");
+				return false;
+			}
+		thread_ = std::thread(&StoreSession::store_collection_proc, this);
+		return true;
+	}
 	const vector< shared_ptr<data::SignalBase> > sigs(session_.signalbases());
 
 	shared_ptr<data::Segment> any_segment;
@@ -109,12 +131,12 @@ bool StoreSession::start()
 			const deque< shared_ptr<data::LogicSegment> > &lsegments =
 				ldata->logic_segments();
 
-			if (lsegments.empty()) {
+			if (segment_ >= lsegments.size()) {
 				error_ = tr("Can't save logic channel without data.");
 				return false;
 			}
 
-			lsegment = lsegments.front();
+			lsegment = lsegments.at(segment_);
 			any_segment = lsegment;
 		}
 
@@ -125,13 +147,13 @@ bool StoreSession::start()
 			const deque< shared_ptr<data::AnalogSegment> > &asegments =
 				adata->analog_segments();
 
-			if (asegments.empty()) {
+			if (segment_ >= asegments.size()) {
 				error_ = tr("Can't save analog channel without data.");
 				return false;
 			}
 
-			asegment_list.push_back(asegments.front());
-			any_segment = asegments.front();
+			asegment_list.push_back(asegments.at(segment_));
+			any_segment = asegments.at(segment_);
 
 			achannel_list.push_back(signal);
 		}
@@ -186,10 +208,10 @@ bool StoreSession::start()
 				any_segment->samplerate())}});
 		output_->receive(meta);
 		// Save the outcome of these samples, not a newly selected device state.
-		if (!session_.capture_outcome().isEmpty()) {
+		if (!session_.segment_capture_outcome(segment_).isEmpty()) {
 			auto outcome = context->create_meta_packet({
-				{ConfigKey::CAPTURE_STATUS, Glib::Variant<Glib::ustring>::create(session_.capture_outcome().toStdString())},
-				{ConfigKey::CAPTURE_ERROR, Glib::Variant<Glib::ustring>::create(session_.capture_error().toStdString())}});
+				{ConfigKey::CAPTURE_STATUS, Glib::Variant<Glib::ustring>::create(session_.segment_capture_outcome(segment_).toStdString())},
+				{ConfigKey::CAPTURE_ERROR, Glib::Variant<Glib::ustring>::create(session_.segment_capture_error(segment_).toStdString())}});
 			output_->receive(outcome);
 		}
 
@@ -207,7 +229,7 @@ bool StoreSession::start()
 	GlobalSettings settings;
 	bool save_with_setup = settings.value(GlobalSettings::Key_General_SaveWithSetup).toBool();
 
-	if ((output_format_->name() == "srzip") && (save_with_setup)) {
+	if ((output_format_->name() == "srzip") && save_with_setup && save_setup_) {
 		QString setup_file_name = QString::fromStdString(file_name_);
 		setup_file_name.truncate(setup_file_name.lastIndexOf('.'));
 		setup_file_name.append(".pvs");
@@ -228,6 +250,62 @@ void StoreSession::wait()
 void StoreSession::cancel()
 {
 	interrupt_ = true;
+}
+
+void StoreSession::store_collection_proc()
+{
+	try {
+		QTemporaryDir directory;
+		if (!directory.isValid()) throw std::runtime_error("Cannot create capture collection staging directory.");
+		CaptureCollection collection;
+		collection.status = session_.capture_outcome();
+		collection.error = session_.capture_error();
+		QStringList members;
+		const auto count = session_.captured_segment_count();
+		unit_count_ = count * 2 + 1;
+		for (uint32_t i = 0; i < count; ++i) {
+			if (interrupt_) break;
+			const auto name = directory.filePath(QString::number(i) + ".sr");
+			StoreSession child(name.toStdString(), output_format_, options_, {0, 0}, session_, i, false, false);
+			if (!child.start()) throw std::runtime_error(child.error().toStdString());
+			while (!child.finished()) {
+				if (interrupt_) child.cancel();
+				QThread::msleep(5);
+			}
+			child.wait();
+			if (interrupt_) break;
+			if (!child.error().isEmpty()) throw std::runtime_error(child.error().toStdString());
+			CollectionFrame frame;
+			for (const auto& signal : session_.signalbases())
+				if (signal->enabled() && signal->type() == data::SignalBase::LogicChannel) {
+					const auto segment = signal->logic_data()->logic_segments().at(i);
+					frame.samples = segment->get_sample_count();
+					frame.samplerate = segment->samplerate();
+					break;
+				}
+			if (!frame.samples || !frame.samplerate)
+				throw std::runtime_error("Cannot save a digital collection without samples and samplerate.");
+			frame.status = session_.segment_capture_outcome(i);
+			frame.error = session_.segment_capture_error(i);
+			for (const auto& t : session_.get_triggers(i)) frame.triggers.append(QString::fromStdString(t.str()));
+			collection.frames.push_back(std::move(frame));
+			members.append(name);
+			units_stored_ = i + 1;
+			progress_updated();
+		}
+		if (!interrupt_) {
+			collection.write(QString::fromStdString(file_name_), members, interrupt_, [this, count](int done, int) {
+				units_stored_ = count + done;
+				progress_updated();
+			});
+			store_successful();
+		}
+	} catch (const std::exception& error) {
+		if (!interrupt_) error_ = tr("Error while saving collection: ") + error.what();
+	}
+	units_stored_ = unit_count_ = 0;
+	finished_ = true;
+	progress_updated();
 }
 
 void StoreSession::store_proc(vector< shared_ptr<data::SignalBase> > achannel_list,
@@ -335,6 +413,7 @@ void StoreSession::store_proc(vector< shared_ptr<data::SignalBase> > achannel_li
 	// Zeroing the progress variables indicates that the worker has finished,
 	// including failed/cancelled exports; success is a separate signal.
 	units_stored_ = unit_count_ = 0;
+	finished_ = true;
 	progress_updated();
 }
 

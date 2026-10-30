@@ -95,6 +95,19 @@ T Device::read_config(const ConfigKey *key, const T default_value)
 	return default_value;
 }
 
+void Device::connect_datafeed(FeedCallback callback)
+{
+	datafeed_callback_ = std::move(callback);
+	session_->add_datafeed_callback(datafeed_callback_);
+}
+
+void Device::disconnect_datafeed()
+{
+	if (session_) session_->remove_datafeed_callbacks();
+	datafeed_callback_ = {};
+	frame_callback_ = {};
+}
+
 void Device::start()
 {
 	assert(session_);

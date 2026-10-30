@@ -123,7 +123,7 @@ StandardBar::StandardBar(Session &session, QWidget *parent,
 
 	action_sdm_single_->setIcon(QIcon(":/icons/view-displaymode-single_segment.svg"));
 	action_sdm_single_->setText(tr("Display a single segment"));
-	connect(action_view_show_cursors_, SIGNAL(triggered(bool)),
+	connect(action_sdm_single_, SIGNAL(triggered(bool)),
 		this, SLOT(on_actionSDMSingle_triggered()));
 
 	segment_display_mode_selector_->addAction(action_sdm_last_);
@@ -133,6 +133,7 @@ StandardBar::StandardBar(Session &session, QWidget *parent,
 	segment_display_mode_selector_->hide();
 
 	segment_selector_->setMinimum(1);
+	segment_selector_->setObjectName("captured_segment");
 	segment_selector_->hide();
 
 	connect(&session_, SIGNAL(new_segment(int)),
@@ -272,6 +273,9 @@ void StandardBar::on_new_segment(int new_segment_id)
 
 void StandardBar::on_segment_changed(int segment_id)
 {
+	segment_selector_->setToolTip(tr("Capture %1: %2\n%3\nEach capture has its own time axis. The time between captures is unknown.")
+		.arg(segment_id + 1).arg(session_.segment_capture_outcome(segment_id),
+			session_.segment_capture_error(segment_id)));
 	// We need to adjust the value by 1 because internally, segments
 	// start at 0 while they start with 1 for the spinbox
 	const uint32_t ui_segment_id = segment_id + 1;

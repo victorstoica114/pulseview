@@ -21,6 +21,10 @@
 #define PULSEVIEW_PV_DEVICES_SESSIONFILE_HPP
 
 #include <memory>
+#include <atomic>
+#include <mutex>
+#include <pv/capturecollection.hpp>
+#include <QTemporaryDir>
 
 #include "file.hpp"
 
@@ -43,9 +47,22 @@ public:
 	void open();
 
 	void close();
+	void connect_datafeed(FeedCallback callback) override;
+	void start() override;
+	void run() override;
+	void stop() override;
+	std::vector<std::string> frame_triggers() const override;
 
 private:
 	const shared_ptr<sigrok::Context> context_;
+	std::unique_ptr<CaptureCollection> collection_;
+	std::unique_ptr<QTemporaryDir> temporary_;
+	std::atomic_bool abort_{false};
+	std::recursive_mutex playback_mutex_;
+	shared_ptr<sigrok::Session> playback_;
+	size_t current_frame_ = 0;
+	struct RecordedChannel { unsigned index; int type; std::string name; bool enabled; };
+	std::vector<RecordedChannel> recorded_channels_;
 };
 
 } // namespace devices

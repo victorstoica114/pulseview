@@ -156,6 +156,7 @@ void InputFile::close()
 
 void InputFile::start()
 {
+	interrupt_ = false;
 }
 
 void InputFile::run()
@@ -171,7 +172,6 @@ void InputFile::run()
 
 	vector<char> buffer(BufferSize);
 
-	interrupt_ = false;
 	while (!interrupt_ && !f->eof()) {
 		f->read(buffer.data(), BufferSize);
 		const streamsize size = f->gcount();

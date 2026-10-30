@@ -29,6 +29,7 @@
 #include <QMenu>
 #include <QMessageBox>
 #include <QSettings>
+#include <QSignalBlocker>
 #include <QToolTip>
 
 #include "mainbar.hpp"
@@ -292,6 +293,19 @@ MainBar::MainBar(Session &session, QWidget *parent, pv::views::trace::View *view
 	trigger_button_.setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
 	connect(&trigger_button_, &QToolButton::clicked, this, &MainBar::on_edit_trigger);
 
+	capture_count_.setObjectName("captures_per_run");
+	capture_count_.setRange(1, 10000);
+	capture_count_.setPrefix(tr("Captures: "));
+	capture_count_.setValue(session_.captures_per_run());
+	capture_count_.setToolTip(tr("Finite digital captures per Run. Each capture rearms the same trigger. All segments are retained; events during rearming can be missed. Exact time between segments is unknown."));
+	connect(&capture_count_, QOverload<int>::of(&QSpinBox::valueChanged), this,
+		[this](int value) { session_.set_captures_per_run(value); });
+	connect(&session_, &Session::captures_per_run_changed, this, [this](unsigned count) {
+		const QSignalBlocker blocker(&capture_count_); capture_count_.setValue(count);
+	});
+	connect(&session_, &Session::capture_series_progress, this, [this](unsigned current, unsigned total) {
+		if (total > 1) capture_count_.setToolTip(tr("Capture %1 of %2. Rearming has blind gaps; inter-capture timing is unknown.").arg(current).arg(total));
+	});
 	add_toolbar_widgets();
 
 	sample_count_.installEventFilter(this);
@@ -337,6 +351,7 @@ void MainBar::set_capture_state(pv::Session::capture_state state)
 	trigger_button_.setEnabled(ui_enabled);
 	sample_count_.setEnabled(ui_enabled && !continuous_sampling_enabled());
 	sample_rate_.setEnabled(ui_enabled);
+	capture_count_.setEnabled(ui_enabled && !session_.using_file_device());
 }
 
 void MainBar::reset_device_selector()
@@ -710,6 +725,9 @@ void MainBar::export_file(shared_ptr<OutputFormat> format, bool selection_only, 
 	QSettings settings;
 	const QString dir = settings.value(SettingSaveDirectory).toString();
 
+	auto trace_view = qobject_cast<views::trace::View*>(session_.main_view().get());
+	const uint32_t segment = trace_view ? trace_view->current_segment() : 0;
+	const bool collection = format->name() == "srzip" && !selection_only && session_.captured_segment_count() > 1;
 	pair<uint64_t, uint64_t> sample_range;
 
 	// Selection only? Verify that the cursors are active and fetch their values
@@ -758,6 +776,7 @@ void MainBar::export_file(shared_ptr<OutputFormat> format, bool selection_only, 
 			QString::fromStdString(join(exts, ", *.")),
 			tr("All Files"));
 
+	if (collection) filter = tr("PulseView capture collection (*.srcollection);;All Files (*)");
 	// Show the file dialog
 	if (file_name.isEmpty())
 		file_name = QFileDialog::getSaveFileName(this, tr("Save File"), dir, filter);
@@ -765,6 +784,8 @@ void MainBar::export_file(shared_ptr<OutputFormat> format, bool selection_only, 
 	if (file_name.isEmpty())
 		return;
 
+	if (collection && !file_name.endsWith(".srcollection", Qt::CaseInsensitive))
+		file_name += ".srcollection";
 	const QString abs_path = QFileInfo(file_name).absolutePath();
 	settings.setValue(SettingSaveDirectory, abs_path);
 
@@ -789,7 +810,7 @@ void MainBar::export_file(shared_ptr<OutputFormat> format, bool selection_only, 
 	}
 
 	StoreProgress *dlg = new StoreProgress(file_name, format, options,
-		sample_range, session_, this);
+		sample_range, session_, this, segment, collection);
 	dlg->run();
 }
 
@@ -936,7 +957,7 @@ void MainBar::on_actionOpen_triggered()
 	// Show the dialog
 	const QString file_name = QFileDialog::getOpenFileName(
 		this, tr("Open File"), dir, tr(
-			"sigrok Sessions (*.sr);;"
+			"sigrok Sessions and PulseView collections (*.sr *.srcollection);;"
 			"All Files (*)"));
 
 	if (!file_name.isEmpty()) {
@@ -1088,6 +1109,7 @@ void MainBar::add_toolbar_widgets()
 	trigger_button_action_ = addWidget(&trigger_button_);
 	addWidget(&sample_count_);
 	addWidget(&sample_rate_);
+	addWidget(&capture_count_);
 #ifdef ENABLE_DECODE
 	addSeparator();
 	addWidget(add_decoder_button_);

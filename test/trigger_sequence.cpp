@@ -19,6 +19,11 @@
 #include <QVBoxLayout>
 #include <QFormLayout>
 #include <QFile>
+#include <QJsonDocument>
+#include <QJsonArray>
+#include <QJsonObject>
+#include <QTextStream>
+#include <zip.h>
 #include <QLineEdit>
 #include <QListWidget>
 #include <QPushButton>
@@ -41,6 +46,10 @@
 #include <pv/devices/inputfile.hpp>
 #include <pv/session.hpp>
 #include <pv/storesession.hpp>
+#include <pv/capturecollection.hpp>
+#include <pv/devices/sessionfile.hpp>
+#include <pv/devices/hardwaredevice.hpp>
+#include <pv/toolbars/mainbar.hpp>
 #include <pv/views/trace/logicsignal.hpp>
 #include <pv/views/trace/view.hpp>
 #include <pv/views/trace/flag.hpp>
@@ -58,6 +67,19 @@
 #endif
 
 namespace {
+void wait_capture(pv::Session& session)
+{
+	QElapsedTimer timer; timer.start();
+	while (session.get_capture_state() != pv::Session::Stopped && timer.elapsed() < 10000) {
+		QApplication::processEvents();
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+	}
+	const bool stopped = session.get_capture_state() == pv::Session::Stopped;
+	session.stop_capture();
+	BOOST_REQUIRE(stopped);
+	QApplication::processEvents();
+}
+
 void application()
 {
 	static int argc = 1;
@@ -638,6 +660,360 @@ BOOST_AUTO_TEST_CASE(idle_display_preserves_pulses_cursors_export_and_toggle)
 	}
 }
 
+namespace {
+
+class SeriesDevice : public pv::devices::Device {
+	std::shared_ptr<sigrok::Context> context_;
+public:
+	std::atomic_uint starts{0}, stops{0};
+	std::atomic_bool hold_start{false}, release_start{false};
+	unsigned fail_start = 0, empty_run = 0, timeout_run = 0, missing_end = 0;
+	std::function<void()> after_data;
+	explicit SeriesDevice(Fixture& f) : context_(f.context) {
+		device_ = f.device; session_ = f.session;
+		for (const auto& channel : device_->channels())
+			channel->set_enabled(channel->type() == sigrok::ChannelType::LOGIC);
+		device_->config_set(sigrok::ConfigKey::LIMIT_SAMPLES, Glib::Variant<guint64>::create(32));
+		device_->config_set(sigrok::ConfigKey::SAMPLERATE, Glib::Variant<guint64>::create(1000000));
+	}
+	std::string full_name() const override { return "scripted finite captures"; }
+	std::string display_name(const pv::DeviceManager&) const override { return full_name(); }
+	void open() override {}
+	void close() override {}
+	void start() override {
+		++starts;
+		while (hold_start && !release_start) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		if (starts == fail_start) throw std::runtime_error("scripted rearm failure");
+	}
+	void run() override {
+		if (starts != empty_run) {
+			std::array<uint32_t, 32> samples;
+			samples.fill(starts.load());
+			datafeed_callback_(device_, context_->create_logic_packet(samples.data(), sizeof(samples), 4));
+			if (after_data) after_data();
+		}
+		const bool failed = starts == timeout_run;
+		datafeed_callback_(device_, context_->create_meta_packet({
+			{sigrok::ConfigKey::CAPTURE_STATUS, Glib::Variant<Glib::ustring>::create(failed ? "timeout" : "complete")},
+			{sigrok::ConfigKey::CAPTURE_ERROR, Glib::Variant<Glib::ustring>::create(failed ? "scripted timeout" : "")}}));
+		if (starts != missing_end) datafeed_callback_(device_, context_->create_end_packet());
+	}
+	void stop() override { ++stops; }
+};
+
+void check_tag(pv::Session& session, unsigned index, uint32_t tag)
+{
+	const auto segments = session.signalbases().at(0)->logic_data()->logic_segments();
+	BOOST_REQUIRE(index < segments.size());
+	std::array<uint32_t, 32> data;
+	BOOST_REQUIRE_EQUAL(segments[index]->get_sample_count(), data.size());
+	segments[index]->get_samples(0, data.size(), reinterpret_cast<uint8_t*>(data.data()));
+	for (const auto value : data) BOOST_CHECK_EQUAL(value, tag);
+}
+}
+
+BOOST_AUTO_TEST_CASE(repeated_captures_preserve_all_segments_and_setup)
+{
+	Fixture f; pv::DeviceManager manager(f.context, "", false);
+	pv::Session session(manager, "series");
+	auto device = std::make_shared<SeriesDevice>(f);
+	session.set_device(device);
+	auto view = std::make_shared<pv::views::trace::View>(session, true);
+	session.register_view(view);
+	pv::toolbars::MainBar bar(session, nullptr, view.get());
+	auto count = bar.findChild<QSpinBox*>("captures_per_run");
+	BOOST_REQUIRE(count);
+	BOOST_CHECK_EQUAL(session.captures_per_run(), 1);
+	BOOST_CHECK(!session.set_captures_per_run(0));
+	BOOST_CHECK(!session.set_captures_per_run(10001));
+	BOOST_REQUIRE(session.set_captures_per_run(3));
+	BOOST_CHECK_EQUAL(count->value(), 3);
+	QString error;
+	session.start_capture([&](QString text) { error = text; });
+	wait_capture(session);
+	BOOST_REQUIRE(error.isEmpty());
+	BOOST_CHECK_EQUAL(device->starts.load(), 3);
+	BOOST_REQUIRE_EQUAL(session.captured_segment_count(), 3);
+	for (unsigned i = 0; i < 3; ++i) {
+		check_tag(session, i, i + 1);
+		BOOST_CHECK_EQUAL(session.segment_capture_outcome(i).toStdString(), "complete");
+	}
+	QTemporaryDir dir;
+	QSettings settings(dir.filePath("setup.ini"), QSettings::IniFormat);
+	session.save_setup(settings);
+	BOOST_CHECK_EQUAL(settings.value("captures_per_run").toUInt(), 3);
+	auto selector = bar.findChild<QSpinBox*>("captured_segment");
+	BOOST_REQUIRE(selector);
+	BOOST_CHECK_EQUAL(selector->maximum(), 3);
+	selector->setValue(1);
+	BOOST_CHECK_EQUAL(view->current_segment(), 0);
+	session.deregister_view(view);
+}
+
+BOOST_AUTO_TEST_CASE(repeated_capture_failure_keeps_earlier_outcomes)
+{
+	for (unsigned scenario = 0; scenario < 4; ++scenario) {
+		Fixture f; pv::DeviceManager manager(f.context, "", false);
+		pv::Session session(manager, "series failures");
+		auto device = std::make_shared<SeriesDevice>(f);
+		if (scenario == 0) device->fail_start = 2;
+		if (scenario == 1) device->timeout_run = 2;
+		if (scenario == 2) device->empty_run = 2;
+		if (scenario == 3) device->missing_end = 2;
+		session.set_device(device); session.set_captures_per_run(4);
+		session.start_capture([](QString) {}); wait_capture(session);
+		BOOST_CHECK_EQUAL(device->starts.load(), 2);
+		BOOST_REQUIRE_EQUAL(session.captured_segment_count(), scenario == 1 || scenario == 3 ? 2 : 1);
+		check_tag(session, 0, 1);
+		BOOST_CHECK_EQUAL(session.segment_capture_outcome(0).toStdString(), "complete");
+		BOOST_CHECK(session.capture_outcome() != "complete");
+		if (scenario == 1) {
+			check_tag(session, 1, 2);
+			BOOST_CHECK_EQUAL(session.segment_capture_outcome(1).toStdString(), "timeout");
+		}
+	}
+}
+
+BOOST_AUTO_TEST_CASE(series_stop_during_start_and_before_rearm)
+{
+	Fixture f; pv::DeviceManager manager(f.context, "", false);
+	pv::Session session(manager, "series stop");
+	auto device = std::make_shared<SeriesDevice>(f);
+	session.set_device(device); session.set_captures_per_run(4);
+	device->hold_start = true;
+	session.start_capture([](QString) {});
+	QElapsedTimer timer; timer.start();
+	while (!device->starts && timer.elapsed() < 2000) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+	BOOST_CHECK(!session.set_captures_per_run(2));
+	session.request_stop_capture(); device->release_start = true;
+	wait_capture(session);
+	BOOST_CHECK_EQUAL(device->starts.load(), 1);
+	BOOST_CHECK(device->stops >= 2);
+	device->hold_start = false;
+	const auto connection = QObject::connect(&session, &pv::Session::capture_series_progress, &session,
+		[&](unsigned current, unsigned) { if (current == 2) session.request_stop_capture(); }, Qt::DirectConnection);
+	session.start_capture([](QString) {}); wait_capture(session);
+	QObject::disconnect(connection);
+	BOOST_CHECK_EQUAL(device->starts.load(), 2); // exactly one new start
+	BOOST_REQUIRE_EQUAL(session.captured_segment_count(), 1);
+	BOOST_CHECK_EQUAL(session.segment_capture_outcome(0).toStdString(), "complete");
+	BOOST_CHECK_EQUAL(session.capture_outcome().toStdString(), "stopped");
+}
+
+BOOST_AUTO_TEST_CASE(collection_roundtrip_partial_frames_triggers_and_selected_export)
+{
+	Fixture f; pv::DeviceManager manager(f.context, "", false);
+	pv::Session session(manager, "collection");
+	auto device = std::make_shared<SeriesDevice>(f);
+	session.set_device(device); session.set_captures_per_run(3);
+	device->timeout_run = 3;
+	device->after_data = [&] { session.restore_segment_triggers({pv::util::Timestamp("0.000016")}); };
+	session.start_capture([](QString) {}); wait_capture(session);
+	QTemporaryDir dir;
+	const auto path = dir.filePath("three.srcollection");
+	{
+		pv::StoreSession store(path.toStdString(), f.context->output_formats().at("srzip"), {}, {0,0}, session, 0, true);
+		BOOST_REQUIRE(store.start()); store.wait();
+		BOOST_REQUIRE_MESSAGE(store.error().isEmpty(), store.error().toStdString());
+	}
+	const auto manifest = pv::CaptureCollection::read(path);
+	BOOST_REQUIRE_EQUAL(manifest.frames.size(), 3);
+	BOOST_CHECK_EQUAL(manifest.status.toStdString(), "timeout");
+	BOOST_CHECK_EQUAL(manifest.frames[0].triggers.size(), 1);
+	pv::Session restored(manager, "restored collection");
+	restored.set_device(std::make_shared<pv::devices::SessionFile>(f.context, path.toStdString()));
+	// A setup can edit display names/enabled state before replay starts.
+	restored.device()->device()->channels().at(0)->set_name("display name");
+	restored.set_captures_per_run(7); // file playback is once, never seven repetitions
+	QString error;
+	restored.start_capture([&](QString text) { error = text; }); wait_capture(restored);
+	BOOST_REQUIRE_MESSAGE(error.isEmpty(), error.toStdString());
+	BOOST_REQUIRE_EQUAL(restored.captured_segment_count(), 3);
+	for (unsigned i = 0; i < 3; ++i) {
+		check_tag(restored, i, i + 1);
+		BOOST_REQUIRE_EQUAL(restored.get_triggers(i).size(), 1);
+		BOOST_CHECK_EQUAL(restored.get_triggers(i)[0], pv::util::Timestamp("0.000016"));
+	}
+	BOOST_CHECK_EQUAL(restored.segment_capture_outcome(0).toStdString(), "complete");
+	BOOST_CHECK_EQUAL(restored.segment_capture_outcome(2).toStdString(), "timeout");
+	BOOST_CHECK_EQUAL(restored.capture_error().toStdString(), "scripted timeout");
+	// Saving over an open/replayed collection must work on Windows too.
+	{
+		pv::StoreSession store(path.toStdString(), f.context->output_formats().at("srzip"), {}, {0,0}, restored, 0, true);
+		BOOST_REQUIRE(store.start()); store.wait(); BOOST_REQUIRE(store.error().isEmpty());
+	}
+	{
+		const auto target = dir.filePath("selected.bin");
+		pv::StoreSession store(target.toStdString(), f.context->output_formats().at("binary"), {}, {4,12}, restored, 1);
+		BOOST_REQUIRE(store.start()); store.wait(); BOOST_REQUIRE(store.error().isEmpty());
+		QFile file(target); BOOST_REQUIRE(file.open(QIODevice::ReadOnly));
+		const auto bytes = file.readAll();
+		BOOST_REQUIRE_EQUAL(bytes.size(), 8 * 4);
+		for (int i = 0; i < bytes.size(); ++i) BOOST_CHECK_EQUAL(uint8_t(bytes[i]), i % 4 ? 0 : 2);
+	}
+	std::atomic_bool cancel{false};
+	const auto updated_manifest = pv::CaptureCollection::read(path);
+	auto altered = updated_manifest;
+	altered.frames[0].sha256 = QString(64, '0');
+	BOOST_CHECK_THROW(altered.extract(path, 0, dir.filePath("bad.sr"), cancel), std::runtime_error);
+	BOOST_CHECK(!QFile::exists(dir.filePath("bad.sr")));
+	const auto sentinel = dir.filePath("existing.srcollection");
+	{ QFile file(sentinel); BOOST_REQUIRE(file.open(QIODevice::WriteOnly)); file.write("keep"); }
+	QStringList members;
+	for (unsigned i = 0; i < 3; ++i) {
+		const auto member = dir.filePath(QString::number(i) + ".sr");
+		updated_manifest.extract(path, i, member, cancel); members.append(member);
+	}
+	BOOST_CHECK_THROW(updated_manifest.write(sentinel, members, cancel, [&](int, int) { cancel = true; }), std::runtime_error);
+	QFile file(sentinel); BOOST_REQUIRE(file.open(QIODevice::ReadOnly)); BOOST_CHECK(file.readAll() == "keep");
+}
+
+BOOST_AUTO_TEST_CASE(dla32_capture_series_hardware_opt_in)
+{
+	const QString directory = qEnvironmentVariable("PV_CAPTURE_SERIES_HARDWARE");
+	if (directory.isEmpty()) return; // No physical discovery in normal tests.
+	application();
+	auto context = sigrok::Context::create();
+	pv::DeviceManager manager(context, "", false);
+	const auto found = context->drivers().at("fnirsi-dla32")->scan();
+	BOOST_REQUIRE_EQUAL(found.size(), 1);
+	pv::Session session(manager, "DLA32 hardware capture series");
+	session.set_device(std::make_shared<pv::devices::HardwareDevice>(context, found[0]));
+	const auto device = session.device()->device();
+	for (const auto& channel : device->channels()) channel->set_enabled(true);
+	device->config_set(sigrok::ConfigKey::SAMPLERATE, Glib::Variant<guint64>::create(1000000));
+	device->config_set(sigrok::ConfigKey::LIMIT_SAMPLES, Glib::Variant<guint64>::create(20000));
+	device->config_set(sigrok::ConfigKey::CAPTURE_RATIO, Glib::Variant<guint64>::create(50));
+	device->config_set(sigrok::ConfigKey::VOLTAGE_THRESHOLD,
+		Glib::VariantBase(g_variant_new("(dd)", 1.6, 1.6)));
+	auto trigger = context->create_trigger("numbered UART input");
+	trigger->add_stage()->add_match(device->channels().at(22), sigrok::TriggerMatchType::FALLING);
+	session.set_trigger(trigger);
+	session.set_captures_per_run(3);
+	QFile events(QDir(directory).filePath("capture-events.jsonl"));
+	BOOST_REQUIRE(events.open(QIODevice::WriteOnly | QIODevice::NewOnly));
+	QTextStream output(&events);
+	QElapsedTimer elapsed; elapsed.start();
+	QString mode;
+	QObject::connect(&session, &pv::Session::capture_series_progress, &session,
+		[&](unsigned current, unsigned total) {
+			output << QJsonDocument(QJsonObject{{"mode",mode},{"capture",int(current)},
+				{"total",int(total)},{"elapsed_ms",double(elapsed.elapsed())}}).toJson(QJsonDocument::Compact) << '\n';
+			output.flush();
+		}, Qt::DirectConnection);
+	for (const auto& current_mode : {QString("Buffer"), QString("Stream")}) {
+		mode = current_mode;
+		device->config_set(sigrok::ConfigKey::DATA_SOURCE, Glib::Variant<Glib::ustring>::create(mode.toStdString()));
+		QString error;
+		session.start_capture([&](QString text) { error = text; });
+		QElapsedTimer timer; timer.start();
+		while (session.get_capture_state() != pv::Session::Stopped && timer.elapsed() < 45000) {
+			QApplication::processEvents();
+			std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		}
+		const bool stopped = session.get_capture_state() == pv::Session::Stopped;
+		session.stop_capture();
+		BOOST_REQUIRE(stopped);
+		BOOST_REQUIRE_MESSAGE(error.isEmpty(), error.toStdString());
+		BOOST_REQUIRE_EQUAL(session.captured_segment_count(), 3);
+		BOOST_REQUIRE_EQUAL(session.capture_outcome().toStdString(), "complete");
+		for (unsigned i = 0; i < 3; ++i) {
+			BOOST_REQUIRE_EQUAL(session.get_segment_sample_count(i), 20000);
+			BOOST_CHECK_EQUAL(session.segment_capture_outcome(i).toStdString(), "complete");
+			const auto path = QDir(directory).filePath(mode + QString("-%1.bin").arg(i+1));
+			pv::StoreSession store(path.toStdString(), context->output_formats().at("binary"), {}, {0,0}, session, i);
+			BOOST_REQUIRE(store.start()); store.wait(); BOOST_REQUIRE(store.error().isEmpty());
+		}
+		const auto path = QDir(directory).filePath(mode + ".srcollection");
+		pv::StoreSession store(path.toStdString(), context->output_formats().at("srzip"), {}, {0,0}, session, 0, true);
+		BOOST_REQUIRE(store.start()); store.wait(); BOOST_REQUIRE_MESSAGE(store.error().isEmpty(), store.error().toStdString());
+		BOOST_CHECK_EQUAL(pv::CaptureCollection::read(path).frames.size(), 3);
+		pv::Session restored(manager, "hardware collection replay");
+		restored.set_device(std::make_shared<pv::devices::SessionFile>(context, path.toStdString()));
+		QString replay_error;
+		restored.start_capture([&](QString message) { replay_error = message; }); wait_capture(restored);
+		BOOST_REQUIRE_MESSAGE(replay_error.isEmpty(), replay_error.toStdString());
+		BOOST_REQUIRE_EQUAL(restored.captured_segment_count(), 3);
+		for (unsigned i = 0; i < 3; ++i) {
+			const auto segment = restored.signalbases().at(0)->logic_data()->logic_segments().at(i);
+			QByteArray bytes(80000, '\0');
+			segment->get_samples(0, 20000, reinterpret_cast<uint8_t*>(bytes.data()));
+			QFile expected(QDir(directory).filePath(mode + QString("-%1.bin").arg(i+1)));
+			BOOST_REQUIRE(expected.open(QIODevice::ReadOnly));
+			BOOST_CHECK(expected.readAll() == bytes);
+			BOOST_CHECK(restored.get_triggers(i) == session.get_triggers(i));
+		}
+	}
+}
+
+BOOST_AUTO_TEST_CASE(collection_rejects_bad_metadata_and_defers_packet_errors_safely)
+{
+	Fixture f; pv::DeviceManager manager(f.context, "", false);
+	pv::Session session(manager, "corruption source");
+	auto source = std::make_shared<SeriesDevice>(f);
+	session.set_device(source); session.set_captures_per_run(3);
+	session.start_capture([](QString) {}); wait_capture(session);
+	QTemporaryDir dir;
+	const auto original = dir.filePath("original.srcollection");
+	{
+		pv::StoreSession store(original.toStdString(), f.context->output_formats().at("srzip"), {}, {0,0}, session, 0, true);
+		BOOST_REQUIRE(store.start()); store.wait(); BOOST_REQUIRE(store.error().isEmpty());
+	}
+	int error;
+	auto zip = zip_open(original.toUtf8().constData(), ZIP_RDONLY, &error);
+	BOOST_REQUIRE(zip);
+	zip_stat_t stat;
+	BOOST_REQUIRE_EQUAL(zip_stat(zip, "pulseview-frames.json", 0, &stat), 0);
+	QByteArray bytes(int(stat.size), '\0');
+	auto entry = zip_fopen(zip, "pulseview-frames.json", 0);
+	BOOST_REQUIRE(entry);
+	BOOST_REQUIRE_EQUAL(zip_fread(entry, bytes.data(), bytes.size()), bytes.size());
+	zip_fclose(entry); zip_close(zip);
+	const auto manifest = QJsonDocument::fromJson(bytes).object();
+	const auto replace_manifest = [](const QString& path, const QJsonObject& manifest) {
+		int error;
+		auto zip = zip_open(path.toUtf8().constData(), 0, &error);
+		BOOST_REQUIRE(zip);
+		const auto bytes = QJsonDocument(manifest).toJson();
+		auto source = zip_source_buffer(zip, bytes.constData(), bytes.size(), 0);
+		BOOST_REQUIRE(source);
+		BOOST_REQUIRE(zip_file_add(zip, "pulseview-frames.json", source, ZIP_FL_OVERWRITE) >= 0);
+		BOOST_REQUIRE_EQUAL(zip_close(zip), 0);
+	};
+	for (unsigned scenario = 0; scenario < 7; ++scenario) {
+		auto altered = manifest;
+		auto frames = altered.value("frames").toArray();
+		auto frame = frames[0].toObject();
+		if (scenario == 0) altered["version"] = 2;
+		if (scenario == 1) altered["inter_frame_timing"] = "known";
+		if (scenario == 2) frame["member"] = "../escape.sr";
+		if (scenario == 3) frame["samples"] = "0";
+		if (scenario == 4) frame["triggers"] = QJsonArray{"NaN"};
+		if (scenario == 5) frame["sha256"] = "invalid";
+		if (scenario == 6) frame["bytes"] = "1";
+		frames[0] = frame; altered["frames"] = frames;
+		const auto path = dir.filePath(QString("corrupt-%1.srcollection").arg(scenario));
+		BOOST_REQUIRE(QFile::copy(original, path)); replace_manifest(path, altered);
+		BOOST_CHECK_THROW(pv::CaptureCollection::read(path), std::runtime_error);
+	}
+	// A valid checksum with an inconsistent declared sample count must produce
+	// a load error, not throw through libsigrok's noexcept C callback trampoline.
+	auto altered = manifest; auto frames = altered.value("frames").toArray();
+	auto frame = frames[1].toObject(); frame["samples"] = "31";
+	frames[1] = frame; altered["frames"] = frames;
+	const auto path = dir.filePath("wrong-count.srcollection");
+	BOOST_REQUIRE(QFile::copy(original, path)); replace_manifest(path, altered);
+	pv::Session restored(manager, "corrupt collection");
+	restored.set_device(std::make_shared<pv::devices::SessionFile>(f.context, path.toStdString()));
+	QString problem;
+	restored.start_capture([&](QString message) { problem = message; }); wait_capture(restored);
+	BOOST_CHECK(problem.contains("sample count"));
+	BOOST_REQUIRE_EQUAL(restored.captured_segment_count(), 1);
+	check_tag(restored, 0, 1);
+	BOOST_CHECK_EQUAL(restored.segment_capture_outcome(0).toStdString(), "complete");
+	BOOST_CHECK_EQUAL(restored.capture_outcome().toStdString(), "error");
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 
 BOOST_AUTO_TEST_SUITE(CrashRecovery)
@@ -841,7 +1217,7 @@ BOOST_AUTO_TEST_CASE(input_capture_and_failed_export_remain_usable)
 		f.context->input_formats().at("binary"), std::map<std::string, Glib::VariantBase>()));
 	QString error;
 	session.start_capture([&](QString message) { error = message; });
-	session.stop_capture();
+	wait_capture(session);
 	BOOST_CHECK(error.isEmpty());
 	BOOST_CHECK_EQUAL(session.get_capture_state(), pv::Session::Stopped);
 	const auto format = f.context->output_formats().at("binary");

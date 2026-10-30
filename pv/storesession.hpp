@@ -70,7 +70,8 @@ public:
 		const shared_ptr<sigrok::OutputFormat> &output_format,
 		const map<string, Glib::VariantBase> &options,
 		const pair<uint64_t, uint64_t> sample_range,
-		const Session &session);
+		const Session &session, uint32_t segment = 0,
+		bool collection = false, bool save_setup = true);
 
 	~StoreSession();
 
@@ -83,8 +84,10 @@ public:
 	void wait();
 
 	void cancel();
+	bool finished() const { return finished_.load(); }
 
 private:
+	void store_collection_proc();
 	void store_proc(vector< shared_ptr<data::SignalBase> > achannel_list,
 		vector< shared_ptr<pv::data::AnalogSegment> > asegment_list,
 		shared_ptr<pv::data::LogicSegment> lsegment);
@@ -100,6 +103,8 @@ private:
 	const map<string, Glib::VariantBase> options_;
 	const pair<uint64_t, uint64_t> sample_range_;
 	const Session &session_;
+	const uint32_t segment_;
+	const bool collection_, save_setup_;
 
 	shared_ptr<sigrok::Output> output_;
 	ofstream output_stream_;
@@ -107,6 +112,7 @@ private:
 	std::thread thread_;
 
 	atomic<bool> interrupt_;
+	atomic<bool> finished_{false};
 
 	atomic<int> units_stored_, unit_count_;
 

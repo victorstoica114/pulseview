@@ -119,7 +119,7 @@ else()
 	endif()
 endif()
 
-list(APPEND PKGDEPS glib-2.0>=2.28.0)
+list(APPEND PKGDEPS glib-2.0>=2.28.0 libzip>=0.11)
 
 # Try to find the prefered glibmm-2.4. If not found then add glibmm-2.68
 # to the dependency list.
@@ -337,6 +337,7 @@ set(pulseview_SOURCES
 	pv/logging.cpp
 	pv/mainwindow.cpp
 	pv/metadata_obj.cpp
+	pv/capturecollection.cpp
 	pv/session.cpp
 	pv/triggersettings.cpp
 	pv/triggersequence.cpp

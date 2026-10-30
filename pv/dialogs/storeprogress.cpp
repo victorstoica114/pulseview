@@ -40,16 +40,19 @@ StoreProgress::StoreProgress(const QString &file_name,
 	const shared_ptr<sigrok::OutputFormat> output_format,
 	const map<string, VariantBase> &options,
 	const pair<uint64_t, uint64_t> sample_range,
-	const Session &session, QWidget *parent) :
+	const Session &session, QWidget *parent, uint32_t segment, bool collection) :
 	QProgressDialog(tr("Saving..."), tr("Cancel"), 0, 0, parent),
 	session_(file_name.toStdString(), output_format, options, sample_range,
-		session),
+		session, segment, collection),
 	showing_error_(false)
 {
 	connect(&session_, SIGNAL(progress_updated()),
 		this, SLOT(on_progress_updated()));
-	connect(&session_, SIGNAL(store_successful()),
-		&session, SLOT(on_data_saved()));
+    setWindowModality(Qt::ApplicationModal);
+    // Exporting one selected frame/range does not save the whole collection.
+    if ((collection || session.captured_segment_count() <= 1) &&
+            sample_range.first == sample_range.second && output_format->name() == "srzip")
+        connect(&session_, SIGNAL(store_successful()), &session, SLOT(on_data_saved()));
 	connect(this, SIGNAL(canceled()), this, SLOT(on_cancel()));
 
 	// Since we're not setting any progress in case of an error, the dialog

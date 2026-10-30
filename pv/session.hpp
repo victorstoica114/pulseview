@@ -197,6 +197,12 @@ public:
 	void stop_capture();
 	void request_stop_capture();
 	bool stop_requested() const;
+	unsigned captures_per_run() const { return captures_per_run_.load(); }
+	bool set_captures_per_run(unsigned count);
+	uint32_t captured_segment_count() const;
+	QString segment_capture_outcome(uint32_t segment) const;
+	QString segment_capture_error(uint32_t segment) const;
+	void restore_segment_triggers(const vector<util::Timestamp>& triggers);
 
 	double get_samplerate() const;
 	Glib::DateTime get_acquisition_start_time() const;
@@ -257,6 +263,7 @@ private:
 	void feed_in_trigger();
 	void feed_in_frame_begin();
 	void feed_in_frame_end();
+	void record_segment_outcome();
 	void feed_in_logic(shared_ptr<sigrok::Logic> logic);
 	void feed_in_analog(shared_ptr<sigrok::Analog> analog);
 
@@ -264,6 +271,8 @@ private:
 		shared_ptr<sigrok::Packet> packet);
 
 Q_SIGNALS:
+	void captures_per_run_changed(unsigned count);
+	void capture_series_progress(unsigned current, unsigned total);
 	void capture_state_changed(int state);
 	void device_changed();
 
@@ -304,6 +313,13 @@ private:
 	mutable mutex sampling_mutex_; //!< Protects access to capture_state_
 	capture_state capture_state_;
 	bool stop_requested_; //!< Protected by sampling_mutex_
+	std::atomic_uint captures_per_run_{1};
+	unsigned active_capture_count_ = 1;
+	bool series_frame_ = false; // Sampling-thread only; intermediate END seals a segment.
+	bool acquisition_received_samples_ = false;
+	bool acquisition_end_received_ = false;
+	struct SegmentOutcome { QString status, error; };
+	vector<SegmentOutcome> segment_outcomes_; // Protected by data_mutex_.
 	QString capture_outcome_, capture_error_;
 	std::atomic_bool device_reconnect_needed_{false};
 
