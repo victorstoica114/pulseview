@@ -880,9 +880,10 @@ BOOST_AUTO_TEST_CASE(dla32_capture_series_hardware_opt_in)
 	pv::Session session(manager, "DLA32 hardware capture series");
 	session.set_device(std::make_shared<pv::devices::HardwareDevice>(context, found[0]));
 	const auto device = session.device()->device();
+	const uint64_t samples = qEnvironmentVariableIsSet("PV_CAPTURE_SERIES_GUARD_PREFIX") ? 100000 : 20000;
 	for (const auto& channel : device->channels()) channel->set_enabled(true);
 	device->config_set(sigrok::ConfigKey::SAMPLERATE, Glib::Variant<guint64>::create(1000000));
-	device->config_set(sigrok::ConfigKey::LIMIT_SAMPLES, Glib::Variant<guint64>::create(20000));
+	device->config_set(sigrok::ConfigKey::LIMIT_SAMPLES, Glib::Variant<guint64>::create(samples));
 	device->config_set(sigrok::ConfigKey::CAPTURE_RATIO, Glib::Variant<guint64>::create(50));
 	device->config_set(sigrok::ConfigKey::VOLTAGE_THRESHOLD,
 		Glib::VariantBase(g_variant_new("(dd)", 1.6, 1.6)));
@@ -918,7 +919,7 @@ BOOST_AUTO_TEST_CASE(dla32_capture_series_hardware_opt_in)
 		BOOST_REQUIRE_EQUAL(session.captured_segment_count(), 3);
 		BOOST_REQUIRE_EQUAL(session.capture_outcome().toStdString(), "complete");
 		for (unsigned i = 0; i < 3; ++i) {
-			BOOST_REQUIRE_EQUAL(session.get_segment_sample_count(i), 20000);
+			BOOST_REQUIRE_EQUAL(session.get_segment_sample_count(i), samples);
 			BOOST_CHECK_EQUAL(session.segment_capture_outcome(i).toStdString(), "complete");
 			const auto path = QDir(directory).filePath(mode + QString("-%1.bin").arg(i+1));
 			pv::StoreSession store(path.toStdString(), context->output_formats().at("binary"), {}, {0,0}, session, i);
@@ -936,8 +937,8 @@ BOOST_AUTO_TEST_CASE(dla32_capture_series_hardware_opt_in)
 		BOOST_REQUIRE_EQUAL(restored.captured_segment_count(), 3);
 		for (unsigned i = 0; i < 3; ++i) {
 			const auto segment = restored.signalbases().at(0)->logic_data()->logic_segments().at(i);
-			QByteArray bytes(80000, '\0');
-			segment->get_samples(0, 20000, reinterpret_cast<uint8_t*>(bytes.data()));
+			QByteArray bytes(int(samples * 4), '\0');
+			segment->get_samples(0, samples, reinterpret_cast<uint8_t*>(bytes.data()));
 			QFile expected(QDir(directory).filePath(mode + QString("-%1.bin").arg(i+1)));
 			BOOST_REQUIRE(expected.open(QIODevice::ReadOnly));
 			BOOST_CHECK(expected.readAll() == bytes);

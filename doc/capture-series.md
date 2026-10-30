@@ -12,6 +12,15 @@ captures is unknown; each segment keeps its own sample time axis. Neither the
 segment number nor host arrival time establishes a continuous hardware timeline.
 The existing Windows/WCH Stream shutdown/settling safeguards still apply.
 
+Only trigger timestamps explicitly provided to PulseView are saved; missing
+timestamps are not inferred from a configured pre-trigger percentage. In the
+tested DLA-32 build no trigger-position packets were reported. Short triggered
+Stream traces could begin directly in the UART start bit, without preceding
+idle, causing a decoder to lose its initial framing. A collection preserves
+those exact received samples; it does not reconstruct missing context. The
+numbered-payload test therefore also uses a separate arm message followed by
+a recorded idle interval. This is a test fixture, not a capture-boundary fix.
+
 Stop cancels the series, including startup and the interval before the next
 acquisition. Errors, timeouts and device disconnects also stop repetition.
 Already received samples remain available, including an incomplete last segment.
