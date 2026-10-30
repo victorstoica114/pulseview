@@ -141,6 +141,9 @@ StandardBar::StandardBar(Session &session, QWidget *parent,
 
 	connect(&session_, SIGNAL(segment_completed(int)),
 		view_, SLOT(on_segment_completed(int)));
+	connect(&session_, &Session::segment_completed, this, [this](int segment) {
+		if (view_->current_segment() == unsigned(segment)) on_segment_changed(segment);
+	});
 
 	connect(segment_selector_, SIGNAL(valueChanged(int)),
 		this, SLOT(on_segment_selected(int)));
@@ -273,9 +276,25 @@ void StandardBar::on_new_segment(int new_segment_id)
 
 void StandardBar::on_segment_changed(int segment_id)
 {
-	segment_selector_->setToolTip(tr("Capture %1: %2\n%3\nEach capture has its own time axis. The time between captures is unknown.")
+	QString tooltip = tr("Capture %1: %2\n%3")
 		.arg(segment_id + 1).arg(session_.segment_capture_outcome(segment_id),
-			session_.segment_capture_error(segment_id)));
+			session_.segment_capture_error(segment_id));
+	uint64_t origin, previous;
+	if (session_.segment_sample_origin(segment_id, origin) && session_.get_samplerate() > 0) {
+		const auto time_text = [](const util::Timestamp& time) {
+			return util::format_time_si(time, util::SIPrefix::unspecified, 9, "s", false);
+		};
+		tooltip += tr("\nSource sample: %1\nFrom stream start: %2 (received sample clock)")
+			.arg(qulonglong(origin)).arg(time_text(util::Timestamp(origin) / session_.get_samplerate()));
+		const auto triggers = session_.get_triggers(segment_id);
+		if (segment_id > 0 && session_.segment_sample_origin(segment_id-1, previous) && origin >= previous) {
+			const auto before = session_.get_triggers(segment_id-1);
+			if (!triggers.empty() && !before.empty())
+				tooltip += tr("\nTrigger spacing: %1").arg(time_text(
+					util::Timestamp(origin-previous)/session_.get_samplerate() + triggers.front()-before.front()));
+		}
+	} else tooltip += tr("\nEach capture has its own time axis. The time between captures is unknown.");
+	segment_selector_->setToolTip(tooltip);
 	// We need to adjust the value by 1 because internally, segments
 	// start at 0 while they start with 1 for the spinbox
 	const uint32_t ui_segment_id = segment_id + 1;

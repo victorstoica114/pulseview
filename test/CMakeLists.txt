@@ -102,6 +102,7 @@ set(pulseview_TEST_SOURCES
 	data/analogsegment.cpp
 	data/logicsegment.cpp
 	data/segment.cpp
+	data/streamwindows.cpp
 	view/ruler.cpp
 	view/idle.cpp
 	test.cpp

@@ -244,6 +244,8 @@ bool Session::data_saved() const
 void Session::save_setup(QSettings &settings) const
 {
 	settings.setValue("captures_per_run", captures_per_run());
+	settings.setValue("stream_windows/enabled", stream_windows_enabled());
+	settings.setValue("stream_windows/pretrigger", window_pretrigger_percent());
 	save_trigger_settings(settings, session(), device_ ? device_->device() : nullptr);
 	int i;
 	int decode_signal_count = 0;
@@ -403,6 +405,8 @@ void Session::save_settings(QSettings &settings) const
 void Session::restore_setup(QSettings &settings)
 {
 	set_captures_per_run(settings.value("captures_per_run", 1).toUInt());
+	set_stream_windows_enabled(settings.value("stream_windows/enabled", false).toBool());
+	set_window_pretrigger_percent(settings.value("stream_windows/pretrigger", 50).toUInt());
 	// Restore channels
 	for (shared_ptr<data::SignalBase> base : signalbases_) {
 		settings.beginGroup(base->internal_name());
@@ -708,6 +712,8 @@ void Session::set_device(shared_ptr<devices::Device> device)
 							triggers.push_back(time);
 					}
 				restore_segment_triggers(triggers);
+				uint64_t origin;
+				if (acquisition_received_samples_ && device_->frame_origin(origin)) set_segment_origin(origin);
 				feed_in_frame_end();
 			}
 		});
@@ -926,6 +932,7 @@ void Session::start_capture(function<void (const QString)> error_handler)
 	}
 
 	active_capture_count_ = using_file_device() ? 1 : captures_per_run();
+	active_window_mode_ = stream_windows_enabled() && !using_file_device();
 	if (active_capture_count_ > 1) {
 		if (!sr_dev) { error_handler(tr("No digital device is available.")); return; }
 		bool digital = false;
@@ -953,6 +960,10 @@ void Session::start_capture(function<void (const QString)> error_handler)
 			return;
 		}
 	}
+	if (active_window_mode_) {
+		try { prepare_stream_windows(); }
+		catch (const std::exception& error) { error_handler(QString::fromUtf8(error.what())); return; }
+	}
 	// Outcome and samples describe the same acquisition. A rejected start
 	// must preserve both until a new acquisition replaces them.
 	{
@@ -967,6 +978,7 @@ void Session::start_capture(function<void (const QString)> error_handler)
 	trigger_list_.clear();
 	segment_sample_count_.clear();
 	segment_outcomes_.clear();
+	segment_origins_.clear();
 
 	// Revert name back to default name (e.g. "Session 1") for real devices
 	// as the (possibly saved) data is gone. File devices keep their name.
@@ -1004,6 +1016,37 @@ bool Session::set_captures_per_run(unsigned count)
 	if (!count || count > 10000 || get_capture_state() != Stopped) return false;
 	if (captures_per_run_.exchange(count) != count) captures_per_run_changed(count);
 	return true;
+}
+
+bool Session::set_stream_windows_enabled(bool enabled)
+{
+	if (get_capture_state() != Stopped) return false;
+	if (stream_windows_enabled_.exchange(enabled) != enabled) stream_windows_changed();
+	return true;
+}
+
+bool Session::set_window_pretrigger_percent(unsigned percent)
+{
+	if (!percent || percent > 90 || get_capture_state() != Stopped) return false;
+	if (window_pretrigger_percent_.exchange(percent) != percent) stream_windows_changed();
+	return true;
+}
+
+bool Session::segment_sample_origin(uint32_t segment, uint64_t& origin) const
+{
+	lock_guard<recursive_mutex> lock(data_mutex_);
+	if (segment >= segment_origins_.size() || !segment_origins_[segment].known) return false;
+	origin = segment_origins_[segment].sample;
+	return true;
+}
+
+void Session::set_segment_origin(uint64_t origin)
+{
+	lock_guard<recursive_mutex> lock(data_mutex_);
+	if (highest_segment_id_ < 0) return;
+	if (segment_origins_.size() <= size_t(highest_segment_id_)) segment_origins_.resize(highest_segment_id_ + 1);
+	segment_origins_[highest_segment_id_].known = true;
+	segment_origins_[highest_segment_id_].sample = origin;
 }
 
 uint32_t Session::captured_segment_count() const
@@ -1505,7 +1548,11 @@ try
 	highest_segment_id_ = -1;
 	frame_began_ = false;
 	acquisition_received_samples_ = false;
+	window_packet_error_.clear();
 
+	if (active_window_mode_) {
+		sample_stream_windows();
+	} else {
 	unsigned completed = 0;
 	series_frame_ = active_capture_count_ > 1;
 	for (unsigned run = 0; run < active_capture_count_ && !stop_requested(); ++run) {
@@ -1524,6 +1571,10 @@ try
 		if (stop_requested()) device_->stop();
 		try { device_->run(); }
 		catch (const QString& error) { throw std::runtime_error(error.toStdString()); }
+		if (!window_packet_error_.isEmpty()) {
+			lock_guard<recursive_mutex> lock(data_mutex_);
+			capture_outcome_ = "error"; capture_error_ = window_packet_error_;
+		}
 		if (series_frame_ && !acquisition_end_received_ && !stop_requested()) {
 			lock_guard<recursive_mutex> lock(data_mutex_);
 			capture_outcome_ = "error";
@@ -1551,6 +1602,7 @@ try
 			(capture_outcome().isEmpty() || capture_outcome() == "complete")) {
 		lock_guard<recursive_mutex> lock(data_mutex_);
 		capture_outcome_ = "stopped";
+	}
 	}
 	set_capture_state(Stopped);
 
@@ -1599,6 +1651,152 @@ catch (const std::exception &error)
 	series_frame_ = false;
 	set_capture_state(Stopped);
 	error_handler(problem);
+}
+
+void Session::prepare_stream_windows()
+{
+	const auto device = device_->device();
+	if (!device || !session() || has_extended_trigger())
+		throw std::runtime_error("Stream windows require standard digital trigger conditions.");
+	if (!device_->can_stream_continuously())
+		throw std::runtime_error("This device does not expose continuous acquisition controls for Stream windows.");
+	for (const auto& channel : device->channels())
+		if (channel->enabled() && channel->type() != sigrok::ChannelType::LOGIC)
+			throw std::runtime_error("Stream windows support digital inputs only.");
+	if (device->config_check(ConfigKey::DATA_SOURCE, sigrok::Capability::GET) &&
+		Glib::VariantBase::cast_dynamic<Glib::Variant<Glib::ustring>>(device->config_get(ConfigKey::DATA_SOURCE)).get() != "Stream")
+		throw std::runtime_error("Select Stream mode before enabling software capture windows.");
+	window_rate_ = device_->read_config<uint64_t>(ConfigKey::SAMPLERATE);
+	window_depth_ = device_->read_config<uint64_t>(ConfigKey::LIMIT_SAMPLES);
+	if (!window_depth_) {
+		const auto msec = device_->read_config<uint64_t>(ConfigKey::LIMIT_MSEC);
+		if (msec && window_rate_ > UINT64_MAX / msec)
+			throw std::runtime_error("Stream window duration is too large.");
+		window_depth_ = msec * window_rate_ / 1000;
+	}
+	if (!window_rate_ || window_depth_ < 2 || window_depth_ > std::numeric_limits<size_t>::max() / 8 ||
+		!device->config_check(ConfigKey::LIMIT_SAMPLES, sigrok::Capability::SET))
+		throw std::runtime_error("Stream windows need a finite sample depth of at least two samples and a known sample rate.");
+	const auto percent = window_pretrigger_percent();
+	window_pre_ = std::max<uint64_t>(1, window_depth_ / 100 * percent + window_depth_ % 100 * percent / 100);
+	window_stages_.clear();
+	const auto trigger = session()->trigger();
+	if (!trigger || trigger->stages().empty() || trigger->stages().size() > 64)
+		throw std::runtime_error("Configure a standard digital trigger with one to 64 stages.");
+	for (const auto& stage : trigger->stages()) {
+		data::WindowTriggerStage next;
+		if (stage->matches().empty()) throw std::runtime_error("Empty software trigger stage.");
+		for (const auto& match : stage->matches()) {
+			const auto channel = match->channel();
+			if (!channel->enabled() || channel->type() != sigrok::ChannelType::LOGIC || channel->index() >= 64)
+				throw std::runtime_error("Every software trigger channel must be an enabled digital input below D64.");
+			const auto bit = UINT64_C(1) << channel->index();
+			switch (match->type()->id()) {
+			case SR_TRIGGER_ZERO: next.low |= bit; break;
+			case SR_TRIGGER_ONE: next.high |= bit; break;
+			case SR_TRIGGER_RISING: next.rising |= bit; break;
+			case SR_TRIGGER_FALLING: next.falling |= bit; break;
+			case SR_TRIGGER_EDGE: next.edge |= bit; break;
+			default: throw std::runtime_error("Unsupported software trigger condition.");
+			}
+		}
+		window_stages_.push_back(next);
+	}
+}
+
+void Session::sample_stream_windows()
+{
+	const auto backend = session();
+	const auto trigger = backend->trigger();
+	std::function<void()> restore_limits;
+	const auto restore = [&] {
+		backend->set_trigger(trigger);
+		if (restore_limits) restore_limits();
+	};
+	window_extractor_.reset();
+	window_packet_error_.clear();
+	window_target_stop_ = false;
+	acquisition_end_received_ = false;
+	series_frame_ = false;
+	bool started = false, ran = false;
+	try {
+		backend->set_trigger(nullptr);
+		restore_limits = device_->suspend_capture_limits();
+		capture_series_progress(1, active_capture_count_);
+		if (!stop_requested()) {
+			set_capture_state(AwaitingTrigger);
+			device_->start(); started = true;
+			if (stop_requested()) device_->stop();
+			try { device_->run(); } catch (const QString& error) { throw std::runtime_error(error.toStdString()); }
+			ran = true;
+		}
+		if (!window_packet_error_.isEmpty()) {
+			lock_guard<recursive_mutex> lock(data_mutex_);
+			capture_outcome_ = "error"; capture_error_ = window_packet_error_;
+		} else if (!acquisition_end_received_ && started && !stop_requested()) {
+			lock_guard<recursive_mutex> lock(data_mutex_);
+			capture_outcome_ = "error"; capture_error_ = tr("Continuous source ended without an end marker.");
+		} else {
+			lock_guard<recursive_mutex> lock(data_mutex_);
+			const bool benign = capture_outcome_.isEmpty() || capture_outcome_ == "stopped" || capture_outcome_ == "complete";
+			if (benign) {
+				if (window_target_stop_) capture_outcome_ = "complete";
+				else if (stop_requested()) capture_outcome_ = "stopped";
+				else { capture_outcome_ = "error"; capture_error_ = tr("Continuous input ended before the requested windows were captured."); }
+			}
+		}
+		if (window_extractor_) window_extractor_->finish();
+		window_extractor_.reset();
+		try { restore(); }
+		catch (const std::exception& error) {
+			lock_guard<recursive_mutex> lock(data_mutex_);
+			// Preserve an informative transport failure instead of replacing a
+			// disconnect/timeout with the secondary configuration failure.
+			if (capture_outcome_.isEmpty() || capture_outcome_ == "complete" || capture_outcome_ == "stopped")
+				capture_outcome_ = "error";
+			if (!capture_error_.isEmpty()) capture_error_ += '\n';
+			capture_error_ += tr("Capture settings could not be restored: %1\nUse Connect to Device, Scan, and select the device again before another capture.")
+				.arg(QString::fromUtf8(error.what()));
+		}
+	} catch (...) {
+		const auto failure = std::current_exception();
+		if (started && !ran) {
+			try { device_->stop(); device_->run(); } catch (...) { }
+		}
+		window_extractor_.reset();
+		try { restore(); } catch (const std::exception& error) {
+			qWarning() << "Cannot restore finite stream settings:" << error.what();
+		}
+		std::rethrow_exception(failure);
+	}
+}
+
+void Session::accept_stream_window(data::StreamWindows::Window&& window)
+{
+	const auto outcome = capture_outcome(), error = capture_error();
+	{
+		lock_guard<recursive_mutex> lock(data_mutex_);
+		if (window.complete) { capture_outcome_ = "complete"; capture_error_.clear(); }
+	}
+	feed_in_frame_begin();
+	const auto packet = device_manager_.context()->create_logic_packet(window.bytes.data(), window.bytes.size(),
+		window_extractor_->unit_size());
+	// Payload unitsize is stored separately from sample positions.
+	feed_in_logic_payload(std::dynamic_pointer_cast<sigrok::Logic>(packet->payload()));
+	set_segment_origin(window.origin);
+	restore_segment_triggers({util::Timestamp(window.trigger_offset) / window_rate_});
+	feed_in_frame_end();
+	{
+		lock_guard<recursive_mutex> lock(data_mutex_);
+		capture_outcome_ = outcome; capture_error_ = error;
+	}
+	if (window_extractor_->target_reached()) {
+		window_target_stop_ = true;
+		device_->stop();
+	} else if (window.complete && !stop_requested()) {
+		capture_series_progress(window_extractor_->completed() + 1, active_capture_count_);
+		set_capture_state(AwaitingTrigger);
+	}
 }
 
 void Session::free_unused_memory()
@@ -1716,6 +1914,8 @@ void Session::feed_in_meta(shared_ptr<Meta> meta)
 	for (auto& entry : meta->config()) {
 		switch (entry.first->id()) {
 		case SR_CONF_SAMPLERATE:
+			if (active_window_mode_ && g_variant_get_uint64(entry.second.gobj()) != window_rate_)
+				throw std::runtime_error("Source sample rate changed during continuous capture windows.");
 			cur_samplerate_ = g_variant_get_uint64(entry.second.gobj());
 			break;
 		case SR_CONF_CAPTURE_STATUS: {
@@ -1820,6 +2020,19 @@ void Session::feed_in_frame_end()
 }
 
 void Session::feed_in_logic(shared_ptr<sigrok::Logic> logic)
+{
+	if (!active_window_mode_) { feed_in_logic_payload(std::move(logic)); return; }
+	if (!logic->data_length() || !window_packet_error_.isEmpty()) return;
+	if (!window_extractor_)
+		window_extractor_.reset(new data::StreamWindows(logic->unit_size(), window_depth_, window_pre_, active_capture_count_,
+			window_stages_, [this](data::StreamWindows::Window&& w) { accept_stream_window(std::move(w)); },
+			[this] { return stop_requested(); }));
+	if (logic->unit_size() != window_extractor_->unit_size())
+		throw std::runtime_error("Source logic width changed during continuous capture windows.");
+	window_extractor_->feed(logic->data_pointer(), logic->data_length());
+}
+
+void Session::feed_in_logic_payload(shared_ptr<sigrok::Logic> logic)
 {
 	if (logic->data_length() == 0) {
 		qDebug() << "WARNING: Received logic packet with 0 samples.";
@@ -1953,6 +2166,7 @@ void Session::data_feed_in(shared_ptr<sigrok::Device> device,
 	assert(device == device_->device());
 	assert(packet);
 
+	try {
 	switch (packet->type()->id()) {
 	case SR_DF_HEADER:
 		feed_in_header();
@@ -1963,37 +2177,29 @@ void Session::data_feed_in(shared_ptr<sigrok::Device> device,
 		break;
 
 	case SR_DF_TRIGGER:
-		feed_in_trigger();
+		if (!active_window_mode_) feed_in_trigger();
 		break;
 
 	case SR_DF_LOGIC:
-		try {
-			feed_in_logic(dynamic_pointer_cast<Logic>(packet->payload()));
-		} catch (bad_alloc&) {
-			out_of_memory_ = true;
-			device_->stop();
-		}
+		feed_in_logic(dynamic_pointer_cast<Logic>(packet->payload()));
 		break;
 
 	case SR_DF_ANALOG:
-		try {
-			feed_in_analog(dynamic_pointer_cast<Analog>(packet->payload()));
-		} catch (bad_alloc&) {
-			out_of_memory_ = true;
-			device_->stop();
-		}
+		if (active_window_mode_) throw std::runtime_error("Analog packets cannot be used for digital Stream windows.");
+		feed_in_analog(dynamic_pointer_cast<Analog>(packet->payload()));
 		break;
 
 	case SR_DF_FRAME_BEGIN:
-		feed_in_frame_begin();
+		if (!active_window_mode_) feed_in_frame_begin();
 		break;
 
 	case SR_DF_FRAME_END:
-		feed_in_frame_end();
+		if (!active_window_mode_) feed_in_frame_end();
 		break;
 
 	case SR_DF_END:
 		acquisition_end_received_ = true;
+		if (active_window_mode_) break;
 		if (series_frame_) { feed_in_frame_end(); break; }
 		// Strictly speaking, this is performed when a frame end marker was
 		// received, so there's no point doing this again. However, not all
@@ -2016,6 +2222,22 @@ void Session::data_feed_in(shared_ptr<sigrok::Device> device,
 
 	default:
 		break;
+	}
+	} catch (...) {
+		// Never unwind through libsigrok's noexcept C datafeed trampoline.
+		QString problem;
+		try { throw; }
+		catch (const bad_alloc&) { out_of_memory_ = true; problem = tr("Out of memory while receiving sample data."); }
+		catch (const std::exception& error) { problem = QString::fromUtf8(error.what()); }
+		catch (const QString& error) { problem = error; }
+		catch (...) { problem = tr("Unexpected sample processing failure."); }
+		{
+			lock_guard<recursive_mutex> lock(data_mutex_);
+			window_packet_error_ = problem;
+			capture_outcome_ = "error";
+			capture_error_ = problem;
+		}
+		try { device_->stop(); } catch (...) { qWarning() << "Failed to stop after a datafeed error."; }
 	}
 }
 

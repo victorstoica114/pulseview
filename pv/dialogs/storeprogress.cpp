@@ -48,11 +48,12 @@ StoreProgress::StoreProgress(const QString &file_name,
 {
 	connect(&session_, SIGNAL(progress_updated()),
 		this, SLOT(on_progress_updated()));
-    setWindowModality(Qt::ApplicationModal);
-    // Exporting one selected frame/range does not save the whole collection.
-    if ((collection || session.captured_segment_count() <= 1) &&
-            sample_range.first == sample_range.second && output_format->name() == "srzip")
-        connect(&session_, SIGNAL(store_successful()), &session, SLOT(on_data_saved()));
+	setWindowModality(Qt::ApplicationModal);
+	// Exporting one selected frame/range does not save the whole collection.
+	if ((collection || session.captured_segment_count() <= 1) &&
+			sample_range.first == sample_range.second && output_format->name() == "srzip") {
+		connect(&session_, SIGNAL(store_successful()), &session, SLOT(on_data_saved()));
+	}
 	connect(this, SIGNAL(canceled()), this, SLOT(on_cancel()));
 
 	// Since we're not setting any progress in case of an error, the dialog

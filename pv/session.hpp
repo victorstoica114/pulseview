@@ -40,6 +40,7 @@
 
 #include <QObject>
 #include <QSettings>
+#include <pv/data/streamwindows.hpp>
 #include <QString>
 #include <QElapsedTimer>
 
@@ -199,6 +200,11 @@ public:
 	bool stop_requested() const;
 	unsigned captures_per_run() const { return captures_per_run_.load(); }
 	bool set_captures_per_run(unsigned count);
+	bool stream_windows_enabled() const { return stream_windows_enabled_.load(); }
+	bool set_stream_windows_enabled(bool enabled);
+	unsigned window_pretrigger_percent() const { return window_pretrigger_percent_.load(); }
+	bool set_window_pretrigger_percent(unsigned percent);
+	bool segment_sample_origin(uint32_t segment, uint64_t& origin) const;
 	uint32_t captured_segment_count() const;
 	QString segment_capture_outcome(uint32_t segment) const;
 	QString segment_capture_error(uint32_t segment) const;
@@ -264,7 +270,12 @@ private:
 	void feed_in_frame_begin();
 	void feed_in_frame_end();
 	void record_segment_outcome();
+	void prepare_stream_windows();
+	void sample_stream_windows();
+	void accept_stream_window(data::StreamWindows::Window&& window);
+	void set_segment_origin(uint64_t origin);
 	void feed_in_logic(shared_ptr<sigrok::Logic> logic);
+	void feed_in_logic_payload(shared_ptr<sigrok::Logic> logic);
 	void feed_in_analog(shared_ptr<sigrok::Analog> analog);
 
 	void data_feed_in(shared_ptr<sigrok::Device> device,
@@ -272,6 +283,7 @@ private:
 
 Q_SIGNALS:
 	void captures_per_run_changed(unsigned count);
+	void stream_windows_changed();
 	void capture_series_progress(unsigned current, unsigned total);
 	void capture_state_changed(int state);
 	void device_changed();
@@ -314,6 +326,16 @@ private:
 	capture_state capture_state_;
 	bool stop_requested_; //!< Protected by sampling_mutex_
 	std::atomic_uint captures_per_run_{1};
+	std::atomic_bool stream_windows_enabled_{false};
+	std::atomic_uint window_pretrigger_percent_{50};
+	bool active_window_mode_ = false;
+	uint64_t window_depth_ = 0, window_pre_ = 0, window_rate_ = 0;
+	std::vector<data::WindowTriggerStage> window_stages_;
+	std::unique_ptr<data::StreamWindows> window_extractor_;
+	QString window_packet_error_;
+	bool window_target_stop_ = false;
+	struct SegmentOrigin { bool known = false; uint64_t sample = 0; };
+	vector<SegmentOrigin> segment_origins_; // Protected by data_mutex_.
 	unsigned active_capture_count_ = 1;
 	bool series_frame_ = false; // Sampling-thread only; intermediate END seals a segment.
 	bool acquisition_received_samples_ = false;

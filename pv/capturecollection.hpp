@@ -11,10 +11,12 @@
 
 namespace pv {
 
-// Independent finite acquisitions. Relative time between frames is unknown.
-// Each member remains a standard single-frame sigrok session file.
+// Each member remains a standard single-frame sigrok session file. Origins
+// are present only for windows derived from the same uninterrupted input.
 struct CollectionFrame {
 	uint64_t samples = 0, samplerate = 0, bytes = 0;
+	uint64_t origin = 0;
+	bool has_origin = false;
 	QString status, error, sha256;
 	QStringList triggers;
 };

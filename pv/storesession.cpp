@@ -287,6 +287,7 @@ void StoreSession::store_collection_proc()
 				throw std::runtime_error("Cannot save a digital collection without samples and samplerate.");
 			frame.status = session_.segment_capture_outcome(i);
 			frame.error = session_.segment_capture_error(i);
+			frame.has_origin = session_.segment_sample_origin(i, frame.origin);
 			for (const auto& t : session_.get_triggers(i)) frame.triggers.append(QString::fromStdString(t.str()));
 			collection.frames.push_back(std::move(frame));
 			members.append(name);

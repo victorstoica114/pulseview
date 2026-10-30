@@ -21,6 +21,7 @@
 #define PULSEVIEW_PV_DEVICES_DEVICE_HPP
 
 #include <functional>
+#include <cstdint>
 #include <vector>
 #include <memory>
 #include <string>
@@ -80,10 +81,15 @@ public:
 	virtual void run();
 
 	virtual void stop();
+	virtual bool can_stream_continuously() const;
+	// Suspend finite limits and return an explicit restoration action. No USB
+	// acquisition is started by this configuration operation.
+	virtual std::function<void()> suspend_capture_limits();
 	virtual void connect_datafeed(FeedCallback callback);
 	virtual void disconnect_datafeed();
 	void set_frame_callback(std::function<void(bool)> callback) { frame_callback_ = std::move(callback); }
 	virtual std::vector<std::string> frame_triggers() const { return {}; }
+	virtual bool frame_origin(uint64_t&) const { return false; }
 
 protected:
 	FeedCallback datafeed_callback_;

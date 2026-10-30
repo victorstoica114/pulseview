@@ -95,6 +95,31 @@ T Device::read_config(const ConfigKey *key, const T default_value)
 	return default_value;
 }
 
+bool Device::can_stream_continuously() const
+{
+	return device_ && device_->config_check(ConfigKey::CONTINUOUS, Capability::GET) &&
+		device_->config_check(ConfigKey::CONTINUOUS, Capability::SET);
+}
+
+std::function<void()> Device::suspend_capture_limits()
+{
+	if (!can_stream_continuously()) throw std::runtime_error("Device does not expose continuous acquisition controls.");
+	const auto source = device_;
+	const bool continuous = g_variant_get_boolean(source->config_get(ConfigKey::CONTINUOUS).gobj());
+	const auto samples = read_config<uint64_t>(ConfigKey::LIMIT_SAMPLES);
+	const auto msec = read_config<uint64_t>(ConfigKey::LIMIT_MSEC);
+	std::function<void()> restore = [source, continuous, samples, msec] {
+		source->config_set(ConfigKey::CONTINUOUS, Glib::Variant<bool>::create(continuous));
+		if (!continuous) {
+			if (msec) source->config_set(ConfigKey::LIMIT_MSEC, Glib::Variant<guint64>::create(msec));
+			else if (samples) source->config_set(ConfigKey::LIMIT_SAMPLES, Glib::Variant<guint64>::create(samples));
+		}
+	};
+	try { source->config_set(ConfigKey::CONTINUOUS, Glib::Variant<bool>::create(true)); }
+	catch (...) { try { restore(); } catch (...) { } throw; }
+	return restore;
+}
+
 void Device::connect_datafeed(FeedCallback callback)
 {
 	datafeed_callback_ = std::move(callback);

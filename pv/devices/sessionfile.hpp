@@ -52,6 +52,7 @@ public:
 	void run() override;
 	void stop() override;
 	std::vector<std::string> frame_triggers() const override;
+	bool frame_origin(uint64_t& origin) const override;
 
 private:
 	const shared_ptr<sigrok::Context> context_;

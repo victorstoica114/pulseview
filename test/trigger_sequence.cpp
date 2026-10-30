@@ -98,6 +98,7 @@ void application()
 	static DecoderRuntime decoder_runtime;
 #endif
 	static const bool initialized = [&] {
+		qRegisterMetaType<pv::util::Timestamp>("util::Timestamp");
 		QCoreApplication::setOrganizationName("PulseViewTests");
 		QCoreApplication::setApplicationName("CrashRecovery");
 		QSettings::setDefaultFormat(QSettings::IniFormat);
@@ -701,6 +702,40 @@ public:
 	void stop() override { ++stops; }
 };
 
+class ContinuousWindowDevice : public SeriesDevice {
+	std::shared_ptr<sigrok::Context> context_;
+public:
+	bool untriggered = false, unlimited = false;
+	bool short_timeout = false, wrong_width = false;
+	bool disconnected = false, partial_user_stop = false, fail_restore = false;
+	std::function<void()> finish_hook;
+	bool limits_suspended = false;
+	explicit ContinuousWindowDevice(Fixture& f) : SeriesDevice(f), context_(f.context) {}
+	bool can_stream_continuously() const override { return true; }
+	std::function<void()> suspend_capture_limits() override {
+		limits_suspended=true;return [this] {
+			if(fail_restore)throw std::runtime_error("scripted restoration failure");
+			limits_suspended=false;
+		};
+	}
+	void run() override {
+		untriggered = !session_->trigger();
+		unlimited = limits_suspended;
+		std::vector<uint32_t> samples(short_timeout || disconnected || partial_user_stop ? 410 : 1000, UINT32_C(1) << 22);
+		for (const auto index : {100,400,700}) if (index < int(samples.size())) samples[index] = 0;
+		for (size_t begin = 0; begin < samples.size() && !stops.load(); begin += 64) {
+			const auto count = std::min<size_t>(64, samples.size()-begin);
+			datafeed_callback_(device_, context_->create_logic_packet(samples.data()+begin, count*4,
+				wrong_width && begin >= 128 ? 1 : 4));
+		}
+		if(finish_hook)finish_hook();
+		datafeed_callback_(device_, context_->create_meta_packet({
+			{sigrok::ConfigKey::CAPTURE_STATUS, Glib::Variant<Glib::ustring>::create(disconnected ? "disconnected" : short_timeout ? "timeout" : "stopped")},
+			{sigrok::ConfigKey::CAPTURE_ERROR, Glib::Variant<Glib::ustring>::create(disconnected ? "source disconnected" : short_timeout ? "source timeout" : "")}}));
+		datafeed_callback_(device_, context_->create_end_packet());
+	}
+};
+
 void check_tag(pv::Session& session, unsigned index, uint32_t tag)
 {
 	const auto segments = session.signalbases().at(0)->logic_data()->logic_segments();
@@ -868,6 +903,229 @@ BOOST_AUTO_TEST_CASE(collection_roundtrip_partial_frames_triggers_and_selected_e
 	QFile file(sentinel); BOOST_REQUIRE(file.open(QIODevice::ReadOnly)); BOOST_CHECK(file.readAll() == "keep");
 }
 
+BOOST_AUTO_TEST_CASE(continuous_window_session_single_start_history_restore_and_collection_clock)
+{
+	Fixture f; pv::DeviceManager manager(f.context,"",false);
+	pv::Session session(manager,"continuous windows");
+	auto source=std::make_shared<ContinuousWindowDevice>(f);
+	session.set_device(source);
+	auto trigger=f.context->create_trigger("D22 software falling");
+	trigger->add_stage()->add_match(f.device->channels().at(22),sigrok::TriggerMatchType::FALLING);
+	session.set_trigger(trigger);
+	BOOST_REQUIRE(session.set_stream_windows_enabled(true));
+	BOOST_REQUIRE(session.set_captures_per_run(3));
+	QString error;
+	std::vector<pv::util::Timestamp> notified;
+	const auto notification=QObject::connect(&session,&pv::Session::trigger_event,&session,
+		[&](int,pv::util::Timestamp time){notified.push_back(time);});
+	session.start_capture([&](QString message){error=message;});wait_capture(session);
+	BOOST_REQUIRE_MESSAGE(error.isEmpty(),error.toStdString());
+	BOOST_CHECK_EQUAL(source->starts.load(),1);
+	BOOST_CHECK(source->unlimited && source->untriggered);
+	BOOST_CHECK(!source->limits_suspended);
+	BOOST_CHECK(session.session()->trigger()==trigger);
+	BOOST_CHECK_EQUAL(g_variant_get_uint64(f.device->config_get(sigrok::ConfigKey::LIMIT_SAMPLES).gobj()),32);
+	BOOST_CHECK_EQUAL(session.capture_outcome().toStdString(),"complete");
+	BOOST_REQUIRE_EQUAL(session.captured_segment_count(),3);
+	BOOST_REQUIRE_EQUAL(notified.size(),3);
+	QObject::disconnect(notification);
+	for(unsigned i=0;i<3;++i) {
+		uint64_t origin;
+		BOOST_REQUIRE(session.segment_sample_origin(i,origin));
+		BOOST_CHECK_EQUAL(origin,84+300*i);
+		const auto segment=session.signalbases().at(0)->logic_data()->logic_segments().at(i);
+		std::array<uint32_t,32> samples;
+		segment->get_samples(0,32,reinterpret_cast<uint8_t*>(samples.data()));
+		for(unsigned n=0;n<32;++n) BOOST_CHECK_EQUAL(samples[n],n==16?0:UINT32_C(1)<<22);
+		BOOST_REQUIRE_EQUAL(session.get_triggers(i).size(),1);
+		BOOST_CHECK_EQUAL(session.get_triggers(i)[0],pv::util::Timestamp("0.000016"));
+	}
+	QTemporaryDir directory; const auto path=directory.filePath("windows.srcollection");
+	{
+		pv::StoreSession store(path.toStdString(),f.context->output_formats().at("srzip"),{}, {0,0},session,0,true);
+		BOOST_REQUIRE(store.start());store.wait();BOOST_REQUIRE(store.error().isEmpty());
+	}
+	const auto collection=pv::CaptureCollection::read(path);
+	BOOST_REQUIRE_EQUAL(collection.frames.size(),3);
+	BOOST_CHECK(collection.frames[0].has_origin);
+	BOOST_CHECK_EQUAL(collection.frames[2].origin,684);
+	// JSON numeric values cannot represent all64bit indices; decimal strings
+	// must round-trip positions above2^53 without a one-sample shift.
+	auto large=collection;QStringList members;std::atomic_bool cancel{false};
+	for(unsigned i=0;i<3;++i){
+		large.frames[i].origin=UINT64_C(9007199254740993)+i*300;
+		const auto member=directory.filePath(QString("member-%1.sr").arg(i));
+		collection.extract(path,i,member,cancel);members.append(member);
+	}
+	const auto large_path=directory.filePath("large-origins.srcollection");
+	large.write(large_path,members,cancel,[](int,int){});
+	const auto loaded=pv::CaptureCollection::read(large_path);
+	BOOST_CHECK_EQUAL(loaded.frames[0].origin,UINT64_C(9007199254740993));
+	BOOST_CHECK_EQUAL(loaded.frames[2].origin-loaded.frames[0].origin,600);
+	pv::Session restored(manager,"clock readback");
+	restored.set_device(std::make_shared<pv::devices::SessionFile>(f.context,path.toStdString()));
+	restored.set_stream_windows_enabled(true); // file replay must not re-extract
+	restored.start_capture([&](QString message){error=message;});wait_capture(restored);
+	BOOST_REQUIRE_MESSAGE(error.isEmpty(),error.toStdString());
+	BOOST_REQUIRE_EQUAL(restored.captured_segment_count(),3);
+	for(unsigned i=0;i<3;++i) {
+		uint64_t origin;BOOST_REQUIRE(restored.segment_sample_origin(i,origin));
+		BOOST_CHECK_EQUAL(origin,84+300*i);
+		BOOST_CHECK(restored.get_triggers(i)==session.get_triggers(i));
+	}
+	auto view=std::make_shared<pv::views::trace::View>(restored,true);
+	restored.register_view(view);
+	pv::toolbars::MainBar bar(restored,nullptr,view.get());
+	auto selector=bar.findChild<QSpinBox*>("captured_segment");BOOST_REQUIRE(selector);
+	view->set_segment_display_mode(pv::views::trace::Trace::ShowSingleSegmentOnly);
+	BOOST_REQUIRE(QMetaObject::invokeMethod(view.get(),"on_segment_changed",Qt::DirectConnection,Q_ARG(int,1)));
+	QApplication::processEvents();
+	BOOST_CHECK(selector->toolTip().contains("Trigger spacing"));
+	restored.deregister_view(view);
+}
+
+BOOST_AUTO_TEST_CASE(continuous_window_partial_error_and_failed_packet_keep_previous_frames)
+{
+	for(unsigned scenario=0;scenario<2;++scenario) {
+		Fixture f;pv::DeviceManager manager(f.context,"",false);
+		pv::Session session(manager,"continuous errors");
+		auto source=std::make_shared<ContinuousWindowDevice>(f);
+		source->short_timeout=scenario==0;source->wrong_width=scenario==1;
+		session.set_device(source);
+		auto trigger=f.context->create_trigger("software falling");
+		trigger->add_stage()->add_match(f.device->channels().at(22),sigrok::TriggerMatchType::FALLING);
+		session.set_trigger(trigger);session.set_stream_windows_enabled(true);session.set_captures_per_run(3);
+		session.start_capture([](QString){});wait_capture(session);
+		BOOST_CHECK_EQUAL(source->starts.load(),1);
+		BOOST_REQUIRE_EQUAL(session.captured_segment_count(),scenario?1:2);
+		BOOST_CHECK_EQUAL(session.segment_capture_outcome(0).toStdString(),"complete");
+		BOOST_CHECK_EQUAL(session.capture_outcome().toStdString(),scenario?"error":"timeout");
+		BOOST_CHECK(session.session()->trigger()==trigger);
+		BOOST_CHECK_EQUAL(g_variant_get_uint64(f.device->config_get(sigrok::ConfigKey::LIMIT_SAMPLES).gobj()),32);
+		if(!scenario) {
+			BOOST_CHECK_EQUAL(session.get_segment_sample_count(1),26);
+			BOOST_CHECK_EQUAL(session.segment_capture_outcome(1).toStdString(),"timeout");
+		}
+	}
+}
+
+BOOST_AUTO_TEST_CASE(continuous_window_stop_during_start_restores_limits_and_trigger)
+{
+	Fixture f;pv::DeviceManager manager(f.context,"",false);
+	pv::Session session(manager,"continuous startup stop");
+	auto source=std::make_shared<ContinuousWindowDevice>(f);source->hold_start=true;
+	session.set_device(source);
+	auto trigger=f.context->create_trigger("falling");
+	trigger->add_stage()->add_match(f.device->channels().at(22),sigrok::TriggerMatchType::FALLING);
+	session.set_trigger(trigger);session.set_stream_windows_enabled(true);session.set_captures_per_run(3);
+	session.start_capture([](QString){});
+	QElapsedTimer timer;timer.start();while(!source->starts && timer.elapsed()<2000)std::this_thread::sleep_for(std::chrono::milliseconds(1));
+	session.request_stop_capture();source->release_start=true;wait_capture(session);
+	BOOST_CHECK_EQUAL(source->starts.load(),1);
+	BOOST_CHECK_EQUAL(session.captured_segment_count(),0);
+	BOOST_CHECK_EQUAL(session.capture_outcome().toStdString(),"stopped");
+	BOOST_CHECK(session.session()->trigger()==trigger);
+	BOOST_CHECK_EQUAL(g_variant_get_uint64(f.device->config_get(sigrok::ConfigKey::LIMIT_SAMPLES).gobj()),32);
+}
+
+BOOST_AUTO_TEST_CASE(continuous_window_partial_stop_disconnect_and_settings_failure)
+{
+	for(unsigned scenario=0;scenario<3;++scenario){
+		Fixture f;pv::DeviceManager manager(f.context,"",false);pv::Session session(manager,"window cleanup");
+		auto source=std::make_shared<ContinuousWindowDevice>(f);
+		source->partial_user_stop=scenario==0;source->disconnected=scenario==1;source->fail_restore=scenario>0;
+		if(!scenario)source->finish_hook=[&]{session.request_stop_capture();};
+		session.set_device(source);
+		auto trigger=f.context->create_trigger("falling");
+		trigger->add_stage()->add_match(f.device->channels().at(22),sigrok::TriggerMatchType::FALLING);
+		session.set_trigger(trigger);session.set_stream_windows_enabled(true);session.set_captures_per_run(3);
+		session.start_capture([](QString){});wait_capture(session);
+		BOOST_CHECK_EQUAL(source->starts.load(),1);
+		BOOST_CHECK_EQUAL(session.captured_segment_count(),scenario==2?3:2);
+		BOOST_CHECK_EQUAL(session.segment_capture_outcome(0).toStdString(),"complete");
+		BOOST_CHECK_EQUAL(session.capture_outcome().toStdString(),scenario==0?"stopped":scenario==1?"disconnected":"error");
+		BOOST_CHECK(session.session()->trigger()==trigger);
+		if(!scenario){
+			BOOST_CHECK_EQUAL(session.get_segment_sample_count(1),26);
+			BOOST_CHECK_EQUAL(session.segment_capture_outcome(1).toStdString(),"stopped");
+			BOOST_CHECK(!source->limits_suspended);
+		}else BOOST_CHECK(session.capture_error().contains("settings"));
+		if(scenario==1)BOOST_CHECK(session.capture_error().contains("source disconnected"));
+	}
+}
+
+BOOST_AUTO_TEST_CASE(continuous_window_saved_example_native_opt_in)
+{
+	const auto path = qEnvironmentVariable("PV_CONTINUOUS_EXAMPLE_FILE");
+	if (path.isEmpty()) return; // Replay only; never discover physical devices.
+	Fixture f;
+	pv::DeviceManager manager(f.context, "", false);
+	pv::Session session(manager, "saved Stream windows");
+	auto view = std::make_shared<pv::views::trace::View>(session, true);
+	session.register_view(view);
+	pv::views::trace::StandardBar bar(session, nullptr, view.get());
+	qobject_cast<QVBoxLayout*>(view->layout())->insertWidget(0, &bar);
+	view->resize(1150, 530);
+	view->move(QApplication::screens().back()->availableGeometry().topLeft() + QPoint(30, 30));
+	view->show();
+	session.set_device(std::make_shared<pv::devices::SessionFile>(f.context, path.toStdString()));
+	for (const auto& signal : session.signalbases())
+		signal->set_enabled(signal->channel()->index() == 22);
+	QString error;
+	session.start_capture([&](QString message) { error = message; }); wait_capture(session);
+	BOOST_REQUIRE_MESSAGE(error.isEmpty(), error.toStdString());
+	BOOST_REQUIRE(session.captured_segment_count() >= 3);
+	BOOST_REQUIRE(session.signalbases().at(22)->enabled());
+	view->set_segment_display_mode(pv::views::trace::Trace::ShowSingleSegmentOnly);
+	BOOST_REQUIRE(QMetaObject::invokeMethod(view.get(), "on_segment_changed", Qt::DirectConnection, Q_ARG(int, 0)));
+	BOOST_REQUIRE_EQUAL(session.get_triggers(0).size(), 1);
+	BOOST_CHECK_EQUAL(session.get_triggers(0)[0], pv::util::Timestamp("0.05"));
+#ifdef ENABLE_DECODE
+	auto decoded = session.add_decode_signal();
+	decoded->stack_decoder(srd_decoder_get_by_id("uart"), false);
+	const auto uart = decoded->decoder_stack().front();
+	uart->set_option("baudrate", g_variant_new_int64(115200));
+	for (const auto& channel : decoded->get_channels())
+		if (std::strcmp(channel.pdch_->id, "rx") == 0)
+			decoded->assign_signal(channel.id, session.signalbases().at(22));
+	QElapsedTimer deadline; deadline.start();
+	while (deadline.elapsed() < 10000 &&
+		decoded->get_decoded_sample_count(0, true) < int64_t(session.get_segment_sample_count(0))) {
+		QApplication::processEvents();
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+	}
+	BOOST_REQUIRE(decoded->get_decoded_sample_count(0, true) >= int64_t(session.get_segment_sample_count(0)));
+	QByteArray message;
+	for (unsigned i = 0; i < decoded->get_binary_data_chunk_count(0, uart.get(), 0); ++i) {
+		const std::vector<uint8_t>* chunk; uint64_t size;
+		decoded->get_binary_data_chunk(0, uart.get(), 0, i, &chunk, &size);
+		message.append(reinterpret_cast<const char*>(chunk->data()), int(size));
+	}
+	BOOST_CHECK_MESSAGE(message.contains("ECHO SEG-000001"), message.toStdString());
+#endif
+	BOOST_REQUIRE(QMetaObject::invokeMethod(view.get(), "perform_delayed_view_update", Qt::DirectConnection));
+	view->set_scale_offset(0.000002, pv::util::Timestamp("0.0498"));
+	QElapsedTimer painted; painted.start();
+	while (painted.elapsed() < 250) {
+		QApplication::processEvents();
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+	}
+	view->set_v_offset(0);
+	QApplication::processEvents();
+	const auto screenshots = qEnvironmentVariable("PV_IDLE_SCREENSHOT_DIR");
+	if (!screenshots.isEmpty()) {
+		QDir().mkpath(screenshots);
+		BOOST_CHECK(view->grab().save(QDir(screenshots).filePath("stream-windows.png")));
+	}
+	BOOST_REQUIRE(QMetaObject::invokeMethod(view.get(), "on_segment_changed", Qt::DirectConnection, Q_ARG(int, 1)));
+	QApplication::processEvents();
+	const auto selector = bar.findChild<QSpinBox*>("captured_segment");
+	BOOST_REQUIRE(selector);
+	BOOST_CHECK(selector->toolTip().contains("Trigger spacing"));
+	session.deregister_view(view);
+	bar.setParent(nullptr); // Stack toolbar must outlive detachment from the view.
+}
+
 BOOST_AUTO_TEST_CASE(dla32_capture_series_hardware_opt_in)
 {
 	const QString directory = qEnvironmentVariable("PV_CAPTURE_SERIES_HARDWARE");
@@ -945,6 +1203,84 @@ BOOST_AUTO_TEST_CASE(dla32_capture_series_hardware_opt_in)
 			BOOST_CHECK(restored.get_triggers(i) == session.get_triggers(i));
 		}
 	}
+}
+
+BOOST_AUTO_TEST_CASE(dla32_continuous_windows_hardware_opt_in)
+{
+	const auto directory=qEnvironmentVariable("PV_CONTINUOUS_WINDOWS_HARDWARE");
+	if(directory.isEmpty())return;
+	application();
+	auto context=sigrok::Context::create();context->set_log_level(sigrok::LogLevel::get(SR_LOG_DBG));
+	pv::DeviceManager manager(context,"",false);
+	const auto found=context->drivers().at("fnirsi-dla32")->scan();BOOST_REQUIRE_EQUAL(found.size(),1);
+	pv::Session session(manager,"uninterrupted event windows");
+	session.set_device(std::make_shared<pv::devices::HardwareDevice>(context,found[0]));
+	const auto device=session.device()->device();
+	const uint64_t rate=qEnvironmentVariableIsSet("PV_CONTINUOUS_RATE") ? qEnvironmentVariable("PV_CONTINUOUS_RATE").toULongLong() : 1000000;
+	const unsigned target=qEnvironmentVariableIsSet("PV_CONTINUOUS_COUNT") ? qEnvironmentVariable("PV_CONTINUOUS_COUNT").toUInt() : 3;
+	BOOST_REQUIRE(rate>=1000000 && rate<=50000000 && target>=3 && target<=20);
+	const bool sparse=qEnvironmentVariableIsSet("PV_CONTINUOUS_SPARSE");
+	for(const auto& channel:device->channels())channel->set_enabled(!sparse || channel->index()==0 || channel->index()==22);
+	device->config_set(sigrok::ConfigKey::DATA_SOURCE,Glib::Variant<Glib::ustring>::create("Stream"));
+	device->config_set(sigrok::ConfigKey::SAMPLERATE,Glib::Variant<guint64>::create(rate));
+	device->config_set(sigrok::ConfigKey::LIMIT_SAMPLES,Glib::Variant<guint64>::create(rate/10));
+	device->config_set(sigrok::ConfigKey::VOLTAGE_THRESHOLD,Glib::VariantBase(g_variant_new("(dd)",1.6,1.6)));
+	auto trigger=context->create_trigger("D22 software falling");
+	trigger->add_stage()->add_match(device->channels().at(22),sigrok::TriggerMatchType::FALLING);
+	session.set_trigger(trigger);session.set_captures_per_run(target);session.set_stream_windows_enabled(true);
+	QFile events(QDir(directory).filePath("events.jsonl"));BOOST_REQUIRE(events.open(QIODevice::WriteOnly|QIODevice::NewOnly));
+	QTextStream output(&events);QElapsedTimer elapsed;elapsed.start();
+	QObject::connect(&session,&pv::Session::capture_series_progress,&session,[&](unsigned current,unsigned total){
+		output<<QJsonDocument(QJsonObject{{"event","progress"},{"current",int(current)},{"total",int(total)},
+			{"elapsed_ms",double(elapsed.elapsed())}}).toJson(QJsonDocument::Compact)<<'\n';output.flush();
+	},Qt::DirectConnection);
+	QString error;
+	session.start_capture([&](QString text){error=text;});
+	QElapsedTimer deadline;deadline.start();
+	while(session.get_capture_state()!=pv::Session::Stopped && deadline.elapsed()<60000){
+		QApplication::processEvents();std::this_thread::sleep_for(std::chrono::milliseconds(1));
+	}
+	const bool stopped=session.get_capture_state()==pv::Session::Stopped;
+	session.stop_capture();BOOST_REQUIRE(stopped);BOOST_REQUIRE_MESSAGE(error.isEmpty(),error.toStdString());
+	BOOST_REQUIRE_EQUAL(session.capture_outcome().toStdString(),"complete");
+	BOOST_REQUIRE_EQUAL(session.captured_segment_count(),target);
+	BOOST_CHECK(session.session()->trigger()==trigger);
+	BOOST_CHECK(!g_variant_get_boolean(device->config_get(sigrok::ConfigKey::CONTINUOUS).gobj()));
+	BOOST_CHECK_EQUAL(g_variant_get_uint64(device->config_get(sigrok::ConfigKey::LIMIT_SAMPLES).gobj()),rate/10);
+	QJsonArray frames;
+	for(unsigned i=0;i<target;++i){
+		uint64_t origin;BOOST_REQUIRE(session.segment_sample_origin(i,origin));
+		BOOST_REQUIRE_EQUAL(session.get_segment_sample_count(i),rate/10);
+		const auto triggers=session.get_triggers(i);BOOST_REQUIRE_EQUAL(triggers.size(),1);
+		BOOST_CHECK_EQUAL(triggers[0],pv::util::Timestamp("0.05"));
+		const auto file=QString("Window-%1.bin").arg(i+1);
+		pv::StoreSession store(QDir(directory).filePath(file).toStdString(),context->output_formats().at("binary"),{}, {0,0},session,i);
+		BOOST_REQUIRE(store.start());store.wait();BOOST_REQUIRE(store.error().isEmpty());
+		frames.append(QJsonObject{{"file",file},{"sample_origin",QString::number(origin)},
+			{"trigger_sample",QString::number(origin+rate/20)},{"samples",QString::number(rate/10)}});
+	}
+	const auto path=QDir(directory).filePath("continuous.srcollection");
+	{
+		pv::StoreSession store(path.toStdString(),context->output_formats().at("srzip"),{}, {0,0},session,0,true);
+		BOOST_REQUIRE(store.start());store.wait();BOOST_REQUIRE_MESSAGE(store.error().isEmpty(),store.error().toStdString());
+	}
+	pv::Session restored(manager,"continuous windows readback");
+	restored.set_device(std::make_shared<pv::devices::SessionFile>(context,path.toStdString()));
+	restored.start_capture([&](QString text){error=text;});wait_capture(restored);
+	BOOST_REQUIRE_MESSAGE(error.isEmpty(),error.toStdString());BOOST_REQUIRE_EQUAL(restored.captured_segment_count(),target);
+	for(unsigned i=0;i<target;++i){
+		uint64_t origin,before;BOOST_REQUIRE(restored.segment_sample_origin(i,origin));BOOST_REQUIRE(session.segment_sample_origin(i,before));
+		BOOST_CHECK_EQUAL(origin,before);BOOST_CHECK(restored.get_triggers(i)==session.get_triggers(i));
+		const auto segment=restored.signalbases().at(0)->logic_data()->logic_segments().at(i);
+		BOOST_REQUIRE_EQUAL(segment->unit_size(),4);
+		QByteArray data(int(rate/10*4),'\0');segment->get_samples(0,rate/10,reinterpret_cast<uint8_t*>(data.data()));
+		QFile file(QDir(directory).filePath(QString("Window-%1.bin").arg(i+1)));BOOST_REQUIRE(file.open(QIODevice::ReadOnly));
+		BOOST_CHECK(file.readAll()==data);
+	}
+	QFile report(QDir(directory).filePath("capture-summary.json"));BOOST_REQUIRE(report.open(QIODevice::WriteOnly|QIODevice::NewOnly));
+	report.write(QJsonDocument(QJsonObject{{"samplerate",QString::number(rate)},{"count",int(target)},
+		{"sparse",sparse},{"elapsed_ms",double(elapsed.elapsed())},{"frames",frames},
+		{"settings_restored",true},{"readback_verified",true}}).toJson());
 }
 
 BOOST_AUTO_TEST_CASE(collection_rejects_bad_metadata_and_defers_packet_errors_safely)

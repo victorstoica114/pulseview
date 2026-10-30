@@ -102,6 +102,14 @@ std::vector<std::string> SessionFile::frame_triggers() const
 	return result;
 }
 
+bool SessionFile::frame_origin(uint64_t& origin) const
+{
+	if (!collection_ || current_frame_ >= collection_->frames.size() ||
+		!collection_->frames[current_frame_].has_origin) return false;
+	origin = collection_->frames[current_frame_].origin;
+	return true;
+}
+
 void SessionFile::run()
 {
 	if (!collection_) { Device::run(); return; }

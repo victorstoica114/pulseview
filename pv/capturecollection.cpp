@@ -89,8 +89,10 @@ CaptureCollection CaptureCollection::read(const QString& path)
 	require(error.error == QJsonParseError::NoError && doc.isObject(),
 		"Invalid capture collection JSON.");
 	const auto obj = doc.object();
+	const int version = obj.value("version").toInt(-1);
+	const bool shared_clock = version == 2 && obj.value("inter_frame_timing") == "source_samples";
 	require(obj.value("kind") == "pulseview-capture-collection" &&
-		obj.value("version") == 1 && obj.value("inter_frame_timing") == "unknown",
+		((version == 1 && obj.value("inter_frame_timing") == "unknown") || shared_clock),
 		"Unsupported capture collection format.");
 	require(obj.value("frames").isArray(), "Missing capture collection frames.");
 	const auto items = obj.value("frames").toArray();
@@ -107,6 +109,14 @@ CaptureCollection CaptureCollection::read(const QString& path)
 		frame.samples = number(item, "samples");
 		frame.samplerate = number(item, "samplerate");
 		frame.bytes = number(item, "bytes");
+		if (shared_clock) {
+			frame.has_origin = true;
+			frame.origin = number(item, "sample_origin");
+			require(frame.origin <= UINT64_MAX - frame.samples &&
+				(result.frames.empty() || (frame.origin > result.frames.back().origin &&
+				 frame.samplerate == result.frames.back().samplerate)),
+				"Inconsistent collection source sample clock.");
+		}
 		frame.status = outcome(item);
 		frame.error = item.value("error").toString();
 		frame.sha256 = item.value("sha256").toString();
@@ -174,6 +184,7 @@ void CaptureCollection::write(const QString& path, const QStringList& members,
 	const auto temporary = directory.filePath("collection.zip");
 	auto zip = open_zip(temporary, ZIP_CREATE | ZIP_TRUNCATE);
 	QJsonArray entries;
+	const bool shared_clock = frames.front().has_origin;
 	for (size_t i = 0; i < frames.size(); ++i) {
 		check_cancel(cancel);
 		QFile file(members.at(i));
@@ -187,13 +198,19 @@ void CaptureCollection::write(const QString& path, const QStringList& members,
 			hash.addData(block);
 		}
 		const auto& frame = frames[i];
+		require(frame.has_origin == shared_clock && (!shared_clock ||
+			(frame.origin <= UINT64_MAX - frame.samples && (!i ||
+			 (frame.origin > frames[i-1].origin && frame.samplerate == frames[i-1].samplerate)))),
+			"Cannot mix independent acquisitions and shared-clock windows.");
 		QJsonArray triggers;
 		for (const auto& t : frame.triggers) triggers.append(t);
-		entries.append(QJsonObject{{"member", member_name(i)},
+		QJsonObject entry_info{{"member", member_name(i)},
 			{"samples", QString::number(frame.samples)}, {"samplerate", QString::number(frame.samplerate)},
 			{"bytes", QString::number(file.size())}, {"sha256", QString::fromLatin1(hash.result().toHex())},
 			{"status", frame.status.isEmpty() ? "unknown" : frame.status}, {"error", frame.error},
-			{"triggers", triggers}});
+			{"triggers", triggers}};
+		if (shared_clock) entry_info["sample_origin"] = QString::number(frame.origin);
+		entries.append(entry_info);
 		auto source = zip_source_file(zip.get(), members.at(i).toUtf8().constData(), 0, 0);
 		require(source, "Cannot stage capture frame ZIP member.");
 		const auto entry = zip_file_add(zip.get(), member_name(i).toUtf8().constData(), source, ZIP_FL_ENC_UTF_8);
@@ -203,7 +220,8 @@ void CaptureCollection::write(const QString& path, const QStringList& members,
 		progress(int(i + 1), int(frames.size()) + 1);
 	}
 	const auto manifest = QJsonDocument(QJsonObject{{"kind", "pulseview-capture-collection"},
-		{"version", 1}, {"inter_frame_timing", "unknown"}, {"status", status.isEmpty() ? "unknown" : status},
+		{"version", shared_clock ? 2 : 1}, {"inter_frame_timing", shared_clock ? "source_samples" : "unknown"},
+		{"status", status.isEmpty() ? "unknown" : status},
 		{"error", error}, {"frames", entries}}).toJson();
 	require(uint64_t(manifest.size()) <= MaxManifest, "Collection manifest too large.");
 	auto source = zip_source_buffer(zip.get(), manifest.constData(), manifest.size(), 0);

@@ -304,8 +304,29 @@ MainBar::MainBar(Session &session, QWidget *parent, pv::views::trace::View *view
 		const QSignalBlocker blocker(&capture_count_); capture_count_.setValue(count);
 	});
 	connect(&session_, &Session::capture_series_progress, this, [this](unsigned current, unsigned total) {
-		if (total > 1) capture_count_.setToolTip(tr("Capture %1 of %2. Rearming has blind gaps; inter-capture timing is unknown.").arg(current).arg(total));
+		if (total > 1) capture_count_.setToolTip((session_.stream_windows_enabled() ?
+			tr("Window %1 of %2 from continuous input. Real pre-trigger history; no device restart between windows.") :
+			tr("Capture %1 of %2. Rearming has blind gaps; inter-capture timing is unknown.")).arg(current).arg(total));
 	});
+	stream_windows_.setObjectName("stream_windows_enabled");
+	stream_windows_.setText(tr("Stream windows"));
+	stream_windows_.setToolTip(tr("Extract triggered windows from one untriggered continuous digital stream. Select Stream and a finite window depth first. Incoming USB traffic continues; events within the active window are kept in that window."));
+	window_pretrigger_.setObjectName("window_pretrigger_percent");
+	window_pretrigger_.setRange(1, 90);
+	window_pretrigger_.setPrefix(tr("Pre: "));
+	window_pretrigger_.setSuffix(" %");
+	window_pretrigger_.setToolTip(tr("Real samples before the software trigger. Initial triggers are ignored until this history is available."));
+	connect(&stream_windows_, &QCheckBox::toggled, this, [this](bool enabled) { session_.set_stream_windows_enabled(enabled); });
+	connect(&window_pretrigger_, QOverload<int>::of(&QSpinBox::valueChanged), this,
+		[this](int percent) { session_.set_window_pretrigger_percent(percent); });
+	const auto sync_windows = [this] {
+		const QSignalBlocker mode_blocker(&stream_windows_), percent_blocker(&window_pretrigger_);
+		stream_windows_.setChecked(session_.stream_windows_enabled());
+		window_pretrigger_.setValue(session_.window_pretrigger_percent());
+		window_pretrigger_.setVisible(session_.stream_windows_enabled() && !session_.using_file_device());
+	};
+	connect(&session_, &Session::stream_windows_changed, this, sync_windows);
+	sync_windows();
 	add_toolbar_widgets();
 
 	sample_count_.installEventFilter(this);
@@ -323,6 +344,7 @@ MainBar::MainBar(Session &session, QWidget *parent, pv::views::trace::View *view
 		this, SLOT(refresh_channel_config()));
 
 	update_device_list();
+	set_capture_state(session_.get_capture_state());
 }
 
 void MainBar::update_device_list()
@@ -352,6 +374,10 @@ void MainBar::set_capture_state(pv::Session::capture_state state)
 	sample_count_.setEnabled(ui_enabled && !continuous_sampling_enabled());
 	sample_rate_.setEnabled(ui_enabled);
 	capture_count_.setEnabled(ui_enabled && !session_.using_file_device());
+	stream_windows_.setEnabled(ui_enabled && !session_.using_file_device() &&
+		session_.device() && session_.device()->can_stream_continuously());
+	window_pretrigger_.setEnabled(ui_enabled && !session_.using_file_device());
+	window_pretrigger_.setVisible(session_.stream_windows_enabled() && !session_.using_file_device());
 }
 
 void MainBar::reset_device_selector()
@@ -727,7 +753,9 @@ void MainBar::export_file(shared_ptr<OutputFormat> format, bool selection_only, 
 
 	auto trace_view = qobject_cast<views::trace::View*>(session_.main_view().get());
 	const uint32_t segment = trace_view ? trace_view->current_segment() : 0;
-	const bool collection = format->name() == "srzip" && !selection_only && session_.captured_segment_count() > 1;
+	uint64_t source_origin;
+	const bool collection = format->name() == "srzip" && !selection_only &&
+		(session_.captured_segment_count() > 1 || session_.segment_sample_origin(0, source_origin));
 	pair<uint64_t, uint64_t> sample_range;
 
 	// Selection only? Verify that the cursors are active and fetch their values
@@ -1110,6 +1138,8 @@ void MainBar::add_toolbar_widgets()
 	addWidget(&sample_count_);
 	addWidget(&sample_rate_);
 	addWidget(&capture_count_);
+	addWidget(&stream_windows_);
+	addWidget(&window_pretrigger_);
 #ifdef ENABLE_DECODE
 	addSeparator();
 	addWidget(add_decoder_button_);

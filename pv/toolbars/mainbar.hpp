@@ -34,6 +34,7 @@
 #include <QToolButton>
 #include <QTimer>
 #include <QSpinBox>
+#include <QCheckBox>
 
 #include <pv/session.hpp>
 #include <pv/views/trace/standardbar.hpp>
@@ -189,6 +190,8 @@ private:
 	pv::widgets::SweepTimingWidget sample_count_;
 	pv::widgets::SweepTimingWidget sample_rate_;
 	QSpinBox capture_count_;
+	QCheckBox stream_windows_;
+	QSpinBox window_pretrigger_;
 	bool updating_sample_rate_;
 	bool updating_sample_count_;
 
