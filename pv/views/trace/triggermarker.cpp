@@ -63,7 +63,7 @@ const pv::util::Timestamp TriggerMarker::time() const
 
 float TriggerMarker::get_x() const
 {
-	return ((time_ - view_.offset()) / view_.scale()).convert_to<float>();
+	return view_.time_to_pixel(time_);
 }
 
 QPoint TriggerMarker::drag_point(const QRect &rect) const

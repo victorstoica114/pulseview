@@ -108,8 +108,8 @@ private:
 	int drag_v_offset_;
 	bool allow_vertical_dragging_;
 
-	double pinch_offset0_;
-	double pinch_offset1_;
+	pv::util::Timestamp pinch_offset0_;
+	pv::util::Timestamp pinch_offset1_;
 	bool pinch_zoom_active_;
 };
 

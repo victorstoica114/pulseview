@@ -32,15 +32,14 @@ TimeItem::TimeItem(View &view) :
 void TimeItem::drag_by(const QPoint &delta)
 {
 	if (snapping_disabled_) {
-		set_time(view_.offset() + (drag_point_.x() + delta.x() - 0.5) *
-			view_.scale());
+		set_time(view_.pixel_to_time(drag_point_.x() + delta.x() - 0.5));
 	} else {
 		int64_t sample_num = view_.get_nearest_level_change(drag_point_ + delta);
 
 		if (sample_num > -1)
-			set_time(sample_num / view_.get_signal_under_mouse_cursor()->base()->get_samplerate());
+			set_time(view_.snapped_time(sample_num));
 		else
-			set_time(view_.offset() + (drag_point_.x() + delta.x() - 0.5) * view_.scale());
+			set_time(view_.pixel_to_time(drag_point_.x() + delta.x() - 0.5));
 	}
 }
 

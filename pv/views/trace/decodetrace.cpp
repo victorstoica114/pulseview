@@ -727,18 +727,11 @@ void DecodeTrace::draw_annotations(deque<const Annotation*>& annotations,
 
 	qreal a_end;
 
-	double samples_per_pixel, pixels_offset;
-	tie(pixels_offset, samples_per_pixel) =
-		get_pixels_offset_samples_per_pixel();
-
 	// Gather all annotations that form a visual "block" and draw them as such
 	for (const Annotation* a : annotations) {
 
-		const qreal abs_a_start = a->start_sample() / samples_per_pixel;
-		const qreal abs_a_end   = a->end_sample() / samples_per_pixel;
-
-		const qreal a_start = abs_a_start - pixels_offset;
-		a_end = abs_a_end - pixels_offset;
+		const qreal a_start = sample_x(a->start_sample());
+		a_end = sample_x(a->end_sample());
 
 		const qreal a_width = a_end - a_start;
 		const qreal delta = a_end - prev_end;
@@ -802,12 +795,8 @@ void DecodeTrace::draw_annotations(deque<const Annotation*>& annotations,
 void DecodeTrace::draw_annotation(const Annotation* a, QPainter &p,
 	const ViewItemPaintParams &pp, int y, const DecodeTraceRow& row) const
 {
-	double samples_per_pixel, pixels_offset;
-	tie(pixels_offset, samples_per_pixel) =
-		get_pixels_offset_samples_per_pixel();
-
-	const double start = a->start_sample() / samples_per_pixel - pixels_offset;
-	const double end = a->end_sample() / samples_per_pixel - pixels_offset;
+	const double start = sample_x(a->start_sample());
+	const double end = sample_x(a->end_sample());
 
 	p.setPen(a->dark_color());
 	p.setBrush(a->color());
@@ -926,8 +915,6 @@ void DecodeTrace::draw_range(const Annotation* a, QPainter &p,
 
 void DecodeTrace::draw_unresolved_period(QPainter &p, int left, int right) const
 {
-	double samples_per_pixel, pixels_offset;
-
 	const int64_t sample_count = decode_signal_->get_working_sample_count(current_segment_);
 	if (sample_count == 0)
 		return;
@@ -938,12 +925,8 @@ void DecodeTrace::draw_unresolved_period(QPainter &p, int left, int right) const
 
 	const int y = get_visual_y();
 
-	tie(pixels_offset, samples_per_pixel) = get_pixels_offset_samples_per_pixel();
-
-	const double start = max(samples_decoded /
-		samples_per_pixel - pixels_offset, left - 1.0);
-	const double end = min(sample_count / samples_per_pixel -
-		pixels_offset, right + 1.0);
+	const double start = max(sample_x(samples_decoded), left - 1.0);
+	const double end = min(sample_x(sample_count), right + 1.0);
 	const QRectF no_decode_rect(start, y - (annotation_height_ / 2) - 0.5,
 		end - start, annotation_height_);
 
@@ -956,39 +939,22 @@ void DecodeTrace::draw_unresolved_period(QPainter &p, int left, int right) const
 	p.drawRect(no_decode_rect);
 }
 
-pair<double, double> DecodeTrace::get_pixels_offset_samples_per_pixel() const
+double DecodeTrace::sample_x(uint64_t sample) const
 {
-	assert(owner_);
-
-	const View *view = owner_->view();
-	assert(view);
-
-	const double scale = view->scale();
-	assert(scale > 0);
-
-	const double pixels_offset =
-		((view->offset() - decode_signal_->start_time()) / scale).convert_to<double>();
-
-	double samplerate = decode_signal_->get_samplerate();
-
-	// Show sample rate as 1Hz when it is unknown
-	if (samplerate == 0.0)
-		samplerate = 1.0;
-
-	return make_pair(pixels_offset, samplerate * scale);
+	const double rate = decode_signal_->get_samplerate() > 0 ? decode_signal_->get_samplerate() : 1;
+	return owner_->view()->time_to_pixel(decode_signal_->start_time() +
+		pv::util::Timestamp(sample) / rate);
 }
 
 pair<uint64_t, uint64_t> DecodeTrace::get_view_sample_range(
 	int x_start, int x_end) const
 {
-	double samples_per_pixel, pixels_offset;
-	tie(pixels_offset, samples_per_pixel) =
-		get_pixels_offset_samples_per_pixel();
-
-	const uint64_t start = (uint64_t)max(
-		(x_start + pixels_offset) * samples_per_pixel, 0.0);
-	const uint64_t end = (uint64_t)max(
-		(x_end + pixels_offset) * samples_per_pixel, 0.0);
+	const double rate = decode_signal_->get_samplerate() > 0 ? decode_signal_->get_samplerate() : 1;
+	const auto origin = decode_signal_->start_time();
+	const uint64_t start = max(pv::util::Timestamp(0),
+		(owner_->view()->pixel_to_time(x_start) - origin) * rate).convert_to<uint64_t>();
+	const uint64_t end = max(pv::util::Timestamp(0),
+		(owner_->view()->pixel_to_time(x_end) - origin) * rate).convert_to<uint64_t>();
 
 	return make_pair(start, end);
 }

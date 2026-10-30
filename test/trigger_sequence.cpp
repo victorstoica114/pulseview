@@ -3,6 +3,8 @@
 #include "test/test.hpp"
 #include <boost/test/unit_test.hpp>
 #include <atomic>
+#include <algorithm>
+#include <array>
 #include <chrono>
 #include <cmath>
 #include <limits>
@@ -12,6 +14,9 @@
 #include <QComboBox>
 #include <QDialogButtonBox>
 #include <QEvent>
+#include <QElapsedTimer>
+#include <QDir>
+#include <QVBoxLayout>
 #include <QFormLayout>
 #include <QFile>
 #include <QLineEdit>
@@ -39,7 +44,18 @@
 #include <pv/views/trace/logicsignal.hpp>
 #include <pv/views/trace/view.hpp>
 #include <pv/views/trace/flag.hpp>
+#include <pv/views/trace/cursor.hpp>
+#include <pv/views/trace/standardbar.hpp>
+#include <pv/views/trace/viewport.hpp>
+#include <pv/data/logic.hpp>
+#include <pv/data/logicsegment.hpp>
 #include <pv/prop/int.hpp>
+#ifdef ENABLE_DECODE
+#include <libsigrokdecode/libsigrokdecode.h>
+#include <pv/data/decodesignal.hpp>
+#include <pv/data/decode/decoder.hpp>
+#include <pv/data/decode/annotation.hpp>
+#endif
 
 namespace {
 void application()
@@ -49,6 +65,16 @@ void application()
 	static char *argv[] = {executable, nullptr};
 	static QTemporaryDir settings_directory;
 	static Application app(argc, argv);
+#ifdef ENABLE_DECODE
+	struct DecoderRuntime {
+		DecoderRuntime() {
+			if (srd_init(nullptr) != SRD_OK || srd_decoder_load("uart") != SRD_OK)
+				throw std::runtime_error("Cannot initialize UART test decoder");
+		}
+		~DecoderRuntime() { srd_exit(); }
+	};
+	static DecoderRuntime decoder_runtime;
+#endif
 	static const bool initialized = [&] {
 		QCoreApplication::setOrganizationName("PulseViewTests");
 		QCoreApplication::setApplicationName("CrashRecovery");
@@ -431,6 +457,185 @@ BOOST_AUTO_TEST_CASE(editor_rejects_foreign_device_with_same_channel_indices)
 		{sigrok::ConfigKey::NUM_ANALOG_CHANNELS, Glib::Variant<gint32>::create(1)},
 	}).at(0);
 	BOOST_CHECK_THROW(pv::dialogs::TriggerEditor(f.context, other, original), std::runtime_error);
+}
+
+BOOST_AUTO_TEST_CASE(idle_display_preserves_pulses_cursors_export_and_toggle)
+{
+	Fixture f;
+	pv::DeviceManager manager(f.context, "", false);
+	pv::Session session(manager, "idle display");
+	auto view = std::make_shared<pv::views::trace::View>(session, true);
+	session.register_view(view);
+	view->resize(1100, 500);
+	view->move(QApplication::screens().back()->availableGeometry().topLeft() + QPoint(30, 30));
+	view->show();
+	QApplication::processEvents();
+	QTemporaryDir directory;
+	QByteArray bytes(1000000, '\x01'); // UART idle HIGH; three frames at 10 kbaud.
+	const std::array<int, 3> starts{100, 500100, 900100};
+	const std::array<uint8_t, 3> values{0x55, 0xa6, 0x3c};
+	for (size_t frame = 0; frame < starts.size(); ++frame)
+		for (int bit = 0; bit < 10; ++bit) {
+			const bool high = bit == 9 || (bit && ((values[frame] >> (bit - 1)) & 1));
+			for (int sample = 0; sample < 100; ++sample)
+				bytes[starts[frame] + bit * 100 + sample] = high ? 1 : 0;
+		}
+	bytes[450000] = '\x81'; // Single-sample pulse on a different recorded input.
+	const auto source = directory.filePath("idle.bin");
+	{
+		QFile input(source); BOOST_REQUIRE(input.open(QIODevice::WriteOnly));
+		BOOST_REQUIRE_EQUAL(input.write(bytes), bytes.size());
+	}
+	session.set_device(std::make_shared<pv::devices::InputFile>(f.context, source.toStdString(),
+		f.context->input_formats().at("binary"), std::map<std::string, Glib::VariantBase>{
+			{"numchannels", Glib::Variant<gint32>::create(8)},
+			{"samplerate", Glib::Variant<guint64>::create(1000000)}}));
+	QString error;
+	session.start_capture([&](QString message) { error = message; });
+	QElapsedTimer deadline; deadline.start();
+	while (deadline.elapsed() < 10000) {
+		QApplication::processEvents();
+		if (session.get_capture_state() == pv::Session::Stopped &&
+			!session.signalbases().empty() && session.signalbases()[0]->has_samples()) break;
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+	}
+	session.stop_capture();
+	QApplication::processEvents();
+	BOOST_REQUIRE(error.isEmpty());
+	BOOST_REQUIRE(!session.signalbases().empty());
+	const auto logic = session.signalbases()[0]->logic_data();
+	BOOST_REQUIRE(logic && !logic->logic_segments().empty());
+	const auto segment = logic->logic_segments()[0];
+	BOOST_REQUIRE_EQUAL(segment->get_sample_count(), 1000000);
+	std::vector<uint8_t> original(bytes.size());
+	segment->get_samples(0, bytes.size(), original.data());
+	BOOST_CHECK_EQUAL(std::memcmp(original.data(), bytes.constData(), bytes.size()), 0);
+	for (unsigned channel = 1; channel < 7; ++channel)
+		session.signalbases()[channel]->set_enabled(false);
+	QMetaObject::invokeMethod(view.get(), "perform_delayed_view_update", Qt::DirectConnection);
+	view->zoom_fit(false);
+	const double plain_scale = view->scale();
+	const auto plain_offset = view->offset();
+	pv::util::Timestamp first("0.0001"), second("0.5001");
+	view->set_cursors(first, second);
+	const auto flag = view->add_flag(pv::util::Timestamp("0.45"));
+#ifdef ENABLE_DECODE
+	auto decoded = session.add_decode_signal();
+	decoded->stack_decoder(srd_decoder_get_by_id("uart"), false);
+	const auto uart = decoded->decoder_stack().front();
+	uart->set_option("baudrate", g_variant_new_int64(10000));
+	for (const auto& channel : decoded->get_channels())
+		if (std::strcmp(channel.pdch_->id, "rx") == 0)
+			decoded->assign_signal(channel.id, session.signalbases()[0]);
+	deadline.restart();
+	while (deadline.elapsed() < 10000 && decoded->get_decoded_sample_count(0, true) < bytes.size()) {
+		QApplication::processEvents();
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+	}
+	BOOST_REQUIRE(decoded->get_decoded_sample_count(0, true) >= bytes.size());
+	BOOST_REQUIRE_EQUAL(decoded->get_binary_data_chunk_count(0, uart.get(), 0), 3);
+	for (unsigned i = 0; i < 3; ++i) {
+		const std::vector<uint8_t>* chunk; uint64_t size;
+		decoded->get_binary_data_chunk(0, uart.get(), 0, i, &chunk, &size);
+		BOOST_REQUIRE_EQUAL(size, 1);
+		BOOST_CHECK_EQUAL(chunk->at(0), values[i]);
+	}
+	auto annotations = [&] {
+		std::deque<const pv::data::decode::Annotation*> all;
+		decoded->get_annotation_subset(all, 0, 0, bytes.size());
+		std::vector<std::string> result;
+		for (const auto ann : all)
+			result.push_back(std::to_string(ann->start_sample()) + ":" +
+				std::to_string(ann->end_sample()) + ":" + ann->longest_annotation().toStdString());
+		std::sort(result.begin(), result.end());
+		return result;
+	};
+	const auto original_annotations = annotations();
+	BOOST_REQUIRE(!original_annotations.empty());
+#endif
+	pv::views::trace::StandardBar bar(session, nullptr, view.get());
+	view->show_cursors(true);
+	qobject_cast<QVBoxLayout*>(view->layout())->insertWidget(0, &bar);
+	QApplication::processEvents();
+	const QString screenshot_dir = qEnvironmentVariable("PV_IDLE_SCREENSHOT_DIR");
+	auto screenshot = [&](const char *name) {
+		QElapsedTimer settled; settled.start();
+		while (settled.elapsed() < 200) {
+			QApplication::processEvents();
+			std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		}
+		if (!screenshot_dir.isEmpty()) {
+			QDir().mkpath(screenshot_dir);
+			BOOST_CHECK(view->grab().save(screenshot_dir + "/" + name));
+		}
+	};
+	screenshot("linear.png");
+	auto *toggle = widget<QAction>(bar, "actionCompressIdle");
+	for (int repeat = 0; repeat < 3; ++repeat) {
+		toggle->setChecked(true);
+		deadline.restart();
+		while (deadline.elapsed() < 5000 && view->idle_compression_pending())
+			QApplication::processEvents();
+		BOOST_REQUIRE(!view->idle_compression_pending());
+		BOOST_REQUIRE(view->idle_compression_enabled());
+		BOOST_CHECK(view->time_unit() == pv::util::TimeUnit::Time);
+		BOOST_REQUIRE(!view->idle_time_map().empty());
+		BOOST_CHECK(view->scale() < plain_scale / 100);
+		BOOST_CHECK(std::abs(flag->get_x() - view->time_to_pixel(flag->time())) <= 1);
+		BOOST_CHECK_EQUAL(flag->time(), pv::util::Timestamp("0.45"));
+		BOOST_CHECK_EQUAL(view->cursors()->second()->time() - view->cursors()->first()->time(),
+			pv::util::Timestamp("0.5"));
+		for (double t : {0.0001, 0.2, 0.45, 0.5001, 0.9001})
+			BOOST_CHECK(abs(view->pixel_to_time(view->time_to_pixel(t)) - t) < pv::util::Timestamp("1e-12"));
+		for (const auto& gap : view->idle_time_map().gaps())
+			BOOST_CHECK(!(gap.begin <= pv::util::Timestamp("0.45") && gap.end > pv::util::Timestamp("0.45")));
+		BOOST_CHECK(!view->viewport()->grab().isNull());
+		if (!repeat) screenshot("folded.png");
+#ifdef ENABLE_DECODE
+		BOOST_CHECK(annotations() == original_annotations);
+#endif
+		QSettings setup(directory.filePath("folded-setup.ini"), QSettings::IniFormat);
+		view->save_settings(setup);
+		BOOST_CHECK_EQUAL(setup.value("scale").toDouble(), plain_scale);
+		BOOST_CHECK_EQUAL(pv::GlobalSettings::restore_timestamp(setup, "offset"), plain_offset);
+		toggle->setChecked(false);
+		BOOST_CHECK(view->idle_time_map().empty());
+		BOOST_CHECK_EQUAL(view->scale(), plain_scale);
+		BOOST_CHECK_EQUAL(view->offset(), plain_offset);
+		if (!repeat) screenshot("restored.png");
+	}
+	view->set_idle_compression(true);
+	while (view->idle_compression_pending()) QApplication::processEvents();
+	const auto target = directory.filePath("unchanged.bin");
+	{
+		pv::StoreSession saved(target.toStdString(), f.context->output_formats().at("binary"), {}, {0, 0}, session);
+		BOOST_REQUIRE(saved.start()); saved.wait(); BOOST_CHECK(saved.error().isEmpty());
+	}
+	QFile exported(target); BOOST_REQUIRE(exported.open(QIODevice::ReadOnly));
+	BOOST_CHECK(exported.readAll() == bytes);
+	const auto selected_target = directory.filePath("selected-real-time.bin");
+	{
+		pv::StoreSession selected(selected_target.toStdString(), f.context->output_formats().at("binary"),
+			{}, {100, 500100}, session);
+		BOOST_REQUIRE(selected.start()); selected.wait(); BOOST_CHECK(selected.error().isEmpty());
+	}
+	QFile selected(selected_target); BOOST_REQUIRE(selected.open(QIODevice::ReadOnly));
+	BOOST_CHECK(selected.readAll() == bytes.mid(100, 500000));
+	// Cancellation must retire timer callbacks before the view/data disappear.
+	view->set_idle_compression(true);
+	view->set_idle_compression(false);
+	QApplication::processEvents();
+	BOOST_CHECK(!view->idle_compression_pending());
+	BOOST_CHECK(!view->idle_compression_enabled());
+	{
+		auto retired = std::make_shared<pv::views::trace::View>(session);
+		session.register_view(retired);
+		retired->set_idle_compression(true);
+		BOOST_REQUIRE(retired->idle_compression_pending());
+		session.deregister_view(retired);
+		retired.reset();
+		QApplication::processEvents();
+	}
 }
 
 BOOST_AUTO_TEST_SUITE_END()

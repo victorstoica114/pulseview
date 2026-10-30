@@ -102,6 +102,7 @@ set(pulseview_TEST_SOURCES
 	data/logicsegment.cpp
 	data/segment.cpp
 	view/ruler.cpp
+	view/idle.cpp
 	test.cpp
 	trigger_settings.cpp
 	trigger_sequence.cpp

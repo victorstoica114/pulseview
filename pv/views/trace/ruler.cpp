@@ -68,7 +68,8 @@ Ruler::Ruler(View &parent) :
 QSize Ruler::sizeHint() const
 {
 	const int text_height = calculate_text_height();
-	return QSize(0, RulerHeight * text_height);
+	return QSize(0, RulerHeight * text_height +
+		(view_.idle_time_map().empty() ? 0 : 3 * text_height + 8));
 }
 
 QSize Ruler::extended_size_hint() const
@@ -120,12 +121,12 @@ QString Ruler::format_time_with_distance(
 
 pv::util::Timestamp Ruler::get_absolute_time_from_x_pos(uint32_t x) const
 {
-	return view_.offset() + ((double)x + 0.5) * view_.scale();
+	return view_.pixel_to_time(double(x) + 0.5);
 }
 
 pv::util::Timestamp Ruler::get_ruler_time_from_x_pos(uint32_t x) const
 {
-	return view_.ruler_offset() + ((double)x + 0.5) * view_.scale();
+	return view_.pixel_to_time(double(x) + 0.5) + view_.zero_offset();
 }
 
 pv::util::Timestamp Ruler::get_ruler_time_from_absolute_time(const pv::util::Timestamp& abs_time) const
@@ -261,13 +262,37 @@ void Ruler::paintEvent(QPaintEvent*)
 				this->view_.tick_precision());
 		};
 
-		tick_position_cache_ = calculate_tick_positions(
+		if (view_.idle_time_map().empty())
+			tick_position_cache_ = calculate_tick_positions(
 			view_.tick_period(),
 			view_.ruler_offset(),
 			view_.scale(),
 			width(),
 			view_.minor_tick_count(),
 			ffunc);
+		else {
+			tick_position_cache_ = TickPositions();
+			const auto right = view_.pixel_to_time(width());
+			auto left = view_.pixel_to_time(0);
+			auto add_ticks = [&](const pv::util::Timestamp& begin, const pv::util::Timestamp& end) {
+				if (end <= begin) return;
+				const double x = view_.time_to_pixel(begin);
+				const double span = view_.time_to_pixel(end) - x;
+				const auto ticks = calculate_tick_positions(view_.tick_period(),
+					begin + view_.zero_offset(), view_.scale(), int(ceil(span)),
+					view_.minor_tick_count(), ffunc);
+				for (const auto& tick : ticks.major)
+					if (tick.first >= 0 && tick.first <= span)
+						tick_position_cache_->major.emplace_back(x + tick.first, tick.second);
+				for (const auto tick : ticks.minor)
+					if (tick >= 0 && tick <= span) tick_position_cache_->minor.push_back(x + tick);
+			};
+			for (const auto gap : view_.visible_idle_gaps(width())) {
+				add_ticks(left, min(gap->begin, right));
+				left = max(left, gap->end);
+			}
+			add_ticks(left, right);
+		}
 	}
 
 	const int ValueMargin = 3;
@@ -282,6 +307,7 @@ void Ruler::paintEvent(QPaintEvent*)
 	// Draw the tick marks
 	p.setPen(palette().color(foregroundRole()));
 
+	int last_label_right = INT_MIN;
 	for (const auto& tick: tick_position_cache_->major) {
 		const int leftedge = 0;
 		const int rightedge = width();
@@ -290,8 +316,11 @@ void Ruler::paintEvent(QPaintEvent*)
 			const int x_left_bound = util::text_width(QFontMetrics(font()), tick.second) / 2;
 			const int x_right_bound = rightedge - x_left_bound;
 			const int x_legend = min(max(x_tick, x_left_bound), x_right_bound);
-			p.drawText(x_legend, ValueMargin, 0, text_height,
-				AlignCenter | AlignTop | TextDontClip, tick.second);
+			if (x_legend - x_left_bound > last_label_right + 6) {
+				p.drawText(x_legend, ValueMargin, 0, text_height,
+					AlignCenter | AlignTop | TextDontClip, tick.second);
+				last_label_right = x_legend + x_left_bound;
+			}
 			p.drawLine(QPointF(x_tick, major_tick_y1),
 			QPointF(tick.first, ruler_height));
 		}
@@ -300,6 +329,21 @@ void Ruler::paintEvent(QPaintEvent*)
 	for (const auto& tick: tick_position_cache_->minor) {
 		p.drawLine(QPointF(tick, minor_tick_y1),
 				QPointF(tick, ruler_height));
+	}
+
+	for (const auto gap : view_.visible_idle_gaps(width())) {
+		const double x1 = max(0.0, view_.time_to_pixel(gap->begin));
+		const double x2 = min(double(width()), view_.time_to_pixel(gap->end));
+		if (x2 <= x1) continue;
+		p.fillRect(QRectF(x1, 0, x2 - x1, height()), QColor(150, 130, 60, 35));
+		p.setPen(palette().color(foregroundRole()));
+		const QString duration = util::format_time_si(gap->end - gap->begin,
+			util::SIPrefix::unspecified, 3, "s", false);
+		const QString label = duration; // Keep the unit visible in narrow bands.
+		p.drawText(QRectF(x1, ruler_height + ValueMargin, x2 - x1, text_height), Qt::AlignCenter,
+			p.fontMetrics().elidedText(label, Qt::ElideRight, int(x2 - x1)));
+		p.drawLine(QPointF(x1, major_tick_y1), QPointF(x1 + 4, ruler_height));
+		p.drawLine(QPointF(x2 - 4, major_tick_y1), QPointF(x2, ruler_height));
 	}
 
 	// Draw the hover mark

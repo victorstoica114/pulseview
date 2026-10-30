@@ -257,7 +257,7 @@ void ViewWidget::mousePressEvent(QMouseEvent *event)
 			view_.show_cursors(false);
 
 		mouse_down_point_ = event->pos();
-		mouse_down_offset_ = view_.offset() + event->pos().x() * view_.scale();
+		mouse_down_offset_ = view_.pixel_to_time(event->pos().x());
 		mouse_down_item_ = get_mouse_over_item(event->pos());
 		mouse_left_press_event(event);
 	}
@@ -312,10 +312,9 @@ void ViewWidget::mouseMoveEvent(QMouseEvent *event)
 	if (event->buttons() & Qt::LeftButton) {
 		if (event->modifiers() & Qt::ShiftModifier) {
 			// Cursor drag
-			pv::util::Timestamp current_offset = view_.offset() + event->pos().x() * view_.scale();
+			pv::util::Timestamp current_offset = view_.pixel_to_time(event->pos().x());
 
-			const int drag_distance = qAbs(current_offset.convert_to<double>() -
-				mouse_down_offset_.convert_to<double>()) / view_.scale();
+			const int drag_distance = qAbs(event->pos().x() - mouse_down_point_.x());
 
 			if (drag_distance > QApplication::startDragDistance()) {
 				view_.show_cursors(true);

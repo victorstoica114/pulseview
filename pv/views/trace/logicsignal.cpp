@@ -172,13 +172,19 @@ void LogicSignal::paint_mid(QPainter &p, ViewItemPaintParams &pp)
 	if (samplerate == 0.0)
 		samplerate = 1.0;
 
-	const double pixels_offset = pp.pixels_offset();
+	const View& view = *owner_->view();
 	const pv::util::Timestamp& start_time = segment->start_time();
 	const int64_t last_sample = (int64_t)segment->get_sample_count() - 1;
 	const double samples_per_pixel = samplerate * pp.scale();
 	const double pixels_per_sample = 1 / samples_per_pixel;
-	const pv::util::Timestamp start = samplerate * (pp.offset() - start_time);
-	const pv::util::Timestamp end = start + samples_per_pixel * pp.width();
+	const pv::util::Timestamp start = samplerate * (view.pixel_to_time(pp.left()) - start_time);
+	const pv::util::Timestamp end = samplerate * (view.pixel_to_time(pp.right()) - start_time);
+	const bool compressed = !view.idle_time_map().empty();
+	const double linear_offset = ((pp.offset() - start_time) / pp.scale()).convert_to<double>();
+	const auto sample_x = [&](int64_t sample) {
+		return compressed ? view.time_to_pixel(start_time + pv::util::Timestamp(sample) / samplerate) :
+			pp.left() + sample / samples_per_pixel - linear_offset;
+	};
 
 	const int64_t start_sample = min(max(floor(start).convert_to<int64_t>(),
 		(int64_t)0), last_sample);
@@ -190,12 +196,12 @@ void LogicSignal::paint_mid(QPainter &p, ViewItemPaintParams &pp)
 	assert(edges.size() >= 2);
 
 	const float first_sample_x =
-		pp.left() + (edges.front().first / samples_per_pixel - pixels_offset);
+		sample_x(edges.front().first);
 	const float last_sample_x =
-		pp.left() + (edges.back().first / samples_per_pixel - pixels_offset);
+		sample_x(edges.back().first);
 
 	// Check whether we need to paint the sampling points
-	const bool show_sampling_points = show_sampling_points_ && (samples_per_pixel < 0.25);
+	const bool show_sampling_points = show_sampling_points_ && view.idle_time_map().empty() && (samples_per_pixel < 0.25);
 	vector<QRectF> sampling_points;
 	float sampling_point_x = first_sample_x;
 	int64_t sampling_point_sample = start_sample;
@@ -225,7 +231,7 @@ void LogicSignal::paint_mid(QPainter &p, ViewItemPaintParams &pp)
 		// after a rising edge corresponds to said rising edge - and vice versa. If
 		// more edges with the same logic level follow, they denote multiple edges.
 
-		const float x = pp.left() + ((*i).first / samples_per_pixel - pixels_offset);
+		const float x = sample_x((*i).first);
 		*line++ = QLineF(x, high_offset, x, low_offset);
 
 		if (fill_high_areas_) {
@@ -285,11 +291,9 @@ void LogicSignal::paint_mid(QPainter &p, ViewItemPaintParams &pp)
 	QLineF *const cap_lines = new QLineF[max_cap_line_count];
 
 	p.setPen(HighColor);
-	paint_caps(p, cap_lines, edges, true, samples_per_pixel,
-		pixels_offset, pp.left(), high_offset);
+	paint_caps(p, cap_lines, edges, true, sample_x, high_offset);
 	p.setPen(LowColor);
-	paint_caps(p, cap_lines, edges, false, samples_per_pixel,
-		pixels_offset, pp.left(), low_offset);
+	paint_caps(p, cap_lines, edges, false, sample_x, low_offset);
 
 	delete[] cap_lines;
 
@@ -370,18 +374,15 @@ vector<LogicSegment::EdgePair> LogicSignal::get_nearest_level_changes(uint64_t s
 
 void LogicSignal::paint_caps(QPainter &p, QLineF *const lines,
 	vector< pair<int64_t, bool> > &edges, bool level,
-	double samples_per_pixel, double pixels_offset, float x_offset,
-	float y_offset)
+	const std::function<double(int64_t)>& sample_x, float y_offset)
 {
 	QLineF *line = lines;
 
 	for (auto i = edges.begin(); i != (edges.end() - 1); i++)
 		if ((*i).second == level) {
 			*line++ = QLineF(
-				((*i).first / samples_per_pixel -
-					pixels_offset) + x_offset, y_offset,
-				((*(i+1)).first / samples_per_pixel -
-					pixels_offset) + x_offset, y_offset);
+				sample_x((*i).first), y_offset,
+				sample_x((*(i+1)).first), y_offset);
 		}
 
 	p.drawLines(lines, line - lines);

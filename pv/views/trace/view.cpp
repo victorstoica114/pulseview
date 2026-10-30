@@ -32,6 +32,7 @@
 
 #include <QApplication>
 #include <QDebug>
+#include <QElapsedTimer>
 #include <QEvent>
 #include <QFontMetrics>
 #include <QMenu>
@@ -255,6 +256,12 @@ View::View(Session &session, bool is_main_view, QMainWindow *parent) :
 	cancel_grab_shortcut_->setAutoRepeat(false);
 
 	// Trigger the initial event manually. The default device has signals
+	idle_scan_timer_.setInterval(0);
+	connect(&idle_scan_timer_, &QTimer::timeout, this, &View::process_idle_scan);
+	connect(this, SIGNAL(time_mapping_changed()),
+		ruler_, SLOT(invalidate_tick_position_cache()));
+
+	// Trigger the initial event manually. The default device has signals
 	// which were created before this object came into being
 	signals_changed();
 
@@ -277,6 +284,7 @@ ViewType View::get_type() const
 
 void View::reset_view_state()
 {
+	reset_idle_compression();
 	ViewBase::reset_view_state();
 
 	segment_display_mode_ = Trace::ShowLastSegmentOnly;
@@ -347,6 +355,7 @@ shared_ptr<Signal> View::get_signal_by_signalbase(shared_ptr<data::SignalBase> b
 
 void View::clear_signalbases()
 {
+	reset_idle_compression();
 	ViewBase::clear_signalbases();
 	signals_.clear();
 }
@@ -495,14 +504,17 @@ const Ruler* View::ruler() const
 
 void View::save_settings(QSettings &settings) const
 {
-	settings.setValue("scale", scale_);
+	// Save the ordinary viewport; folding is a transient inspection mode.
+	settings.setValue("scale", idle_compression_enabled_ ? idle_plain_scale_ : scale_);
+	settings.setValue("idle_threshold", idle_threshold_);
 	settings.setValue("v_offset",
 		scrollarea_->verticalScrollBar()->sliderPosition());
 
 	settings.setValue("splitter_state", splitter_->saveState());
 	settings.setValue("segment_display_mode", segment_display_mode_);
 
-	GlobalSettings::store_timestamp(settings, "offset", offset_);
+	GlobalSettings::store_timestamp(settings, "offset",
+		idle_compression_enabled_ ? idle_plain_offset_ : offset_);
 
 	if (custom_zero_offset_set_)
 		GlobalSettings::store_timestamp(settings, "zero_offset", -zero_offset_);
@@ -518,6 +530,7 @@ void View::save_settings(QSettings &settings) const
 
 void View::restore_settings(QSettings &settings)
 {
+	set_idle_threshold(settings.value("idle_threshold", 0.001).toDouble());
 	// Note: It is assumed that this function is only called once,
 	// immediately after restoring a previous session.
 
@@ -577,6 +590,207 @@ vector< shared_ptr<TimeItem> > View::time_items() const
 double View::scale() const
 {
 	return scale_;
+}
+
+double View::time_to_pixel(const Timestamp& time) const
+{
+	return ((idle_time_map_.to_display(time) -
+		idle_time_map_.to_display(offset_)) / scale_).convert_to<double>();
+}
+
+Timestamp View::pixel_to_time(double x) const
+{
+	return idle_time_map_.to_real(idle_time_map_.to_display(offset_) + x * scale_);
+}
+
+vector<const IdleTimeMap::Gap*> View::visible_idle_gaps(int width) const
+{
+	vector<const IdleTimeMap::Gap*> result;
+	const auto left = pixel_to_time(0), right = pixel_to_time(width);
+	const auto& gaps = idle_time_map_.gaps();
+	auto it = std::lower_bound(gaps.begin(), gaps.end(), left,
+		[](const IdleTimeMap::Gap& gap, const Timestamp& t) { return gap.end < t; });
+	for (; it != gaps.end() && it->begin <= right; ++it) result.push_back(&*it);
+	return result;
+}
+
+QString View::idle_gap_text(double x) const
+{
+	const auto time = pixel_to_time(x);
+	const auto& gaps = idle_time_map_.gaps();
+	const auto it = std::upper_bound(gaps.begin(), gaps.end(), time,
+		[](const Timestamp& t, const IdleTimeMap::Gap& gap) { return t < gap.begin; });
+	if (it == gaps.begin() || time > std::prev(it)->end) return QString();
+	const auto& gap = *std::prev(it);
+	return tr("Idle: %1 (display compressed; real time preserved)").arg(
+		util::format_time_si(gap.end - gap.begin, util::SIPrefix::unspecified, 6, "s", false));
+}
+
+Timestamp View::snapped_time(int64_t sample) const
+{
+	if (!signal_under_mouse_cursor_) return Timestamp(0);
+	const double rate = signal_under_mouse_cursor_->base()->get_samplerate();
+	if (rate <= 0) return Timestamp(0);
+	Timestamp origin(0);
+	const auto logic = std::dynamic_pointer_cast<LogicSignal>(signal_under_mouse_cursor_);
+	if (logic && logic->get_logic_segment_to_paint())
+		origin = logic->get_logic_segment_to_paint()->start_time();
+	return origin + Timestamp(sample) / rate;
+}
+
+void View::idle_mapping_updated()
+{
+	time_mapping_changed();
+	ruler_->updateGeometry();
+	if (header_->parentWidget() && header_->parentWidget()->layout())
+		header_->parentWidget()->layout()->setContentsMargins(0, ruler_->sizeHint().height(), 0, 0);
+	calculate_tick_spacing();
+	update_scroll();
+	ruler_->update();
+	viewport_->update();
+}
+
+void View::reset_idle_compression(const QString& status)
+{
+	const bool was_active = idle_compression_enabled_ || !idle_time_map_.empty();
+	idle_scan_timer_.stop();
+	idle_scan_.reset();
+	idle_scan_segment_.reset();
+	idle_time_map_.clear();
+	pending_idle_map_.clear();
+	idle_map_position_ = 0;
+	idle_ranges_ready_ = false;
+	idle_compression_enabled_ = false;
+	if (was_active) {
+		if (idle_plain_scale_ > 0)
+			set_scale_offset(idle_plain_scale_, idle_plain_offset_);
+		idle_mapping_updated();
+		idle_compression_changed(false, status);
+	}
+}
+
+void View::set_idle_threshold(double seconds)
+{
+	if (!std::isfinite(seconds) || seconds < 0.000001 || seconds > 1000)
+		return;
+	idle_threshold_ = seconds;
+	if (idle_compression_enabled_) set_idle_compression(true);
+}
+
+void View::set_idle_compression(bool enabled)
+{
+	reset_idle_compression();
+	if (!enabled) return;
+	idle_plain_scale_ = scale_;
+	idle_plain_offset_ = offset_;
+	auto reject = [this](const QString& text) {
+		idle_compression_changed(false, text);
+	};
+	if (session_.get_capture_state() != Session::Stopped) {
+		reject(tr("Stop capture before compressing idle time"));
+		return;
+	}
+	shared_ptr<data::LogicSegment> segment;
+	for (const auto& signal : signals_) {
+		if (!signal->enabled()) continue;
+		const auto logic = std::dynamic_pointer_cast<LogicSignal>(signal);
+		if (!logic) {
+			reject(tr("Idle compression requires digital traces only"));
+			return;
+		}
+		const auto current = logic->get_logic_segment_to_paint();
+		if (!current) continue;
+		if (segment && segment != current) {
+			reject(tr("Idle compression requires one synchronized digital segment"));
+			return;
+		}
+		segment = current;
+	}
+	if (!segment || segment->get_sample_count() < 2 || segment->samplerate() <= 0) {
+		reject(tr("No timed digital capture to compress"));
+		return;
+	}
+	determine_time_unit();
+	const double minimum = std::ceil(idle_threshold_ * segment->samplerate());
+	if (!std::isfinite(minimum) || minimum >= double(UINT64_MAX)) {
+		reject(tr("Idle threshold exceeds the capture range"));
+		return;
+	}
+	try {
+		idle_scan_.reset(new data::IdleScan(segment->unit_size(),
+			std::max<uint64_t>(2, uint64_t(minimum))));
+	} catch (const std::exception& e) {
+		reject(QString::fromUtf8(e.what()));
+		return;
+	}
+	idle_scan_segment_ = segment;
+	idle_scan_count_ = segment->get_sample_count();
+	idle_compression_enabled_ = true;
+	idle_compression_changed(true, tr("Finding idle intervals..."));
+	idle_scan_timer_.start();
+}
+
+void View::process_idle_scan()
+{
+	if (!idle_scan_ || !idle_scan_segment_) return;
+	try {
+		if (session_.get_capture_state() != Session::Stopped ||
+			idle_scan_segment_->get_sample_count() != idle_scan_count_) {
+			reset_idle_compression(tr("Capture changed; idle compression disabled"));
+			return;
+		}
+		QElapsedTimer budget;
+		budget.start();
+		std::vector<uint8_t> bytes;
+		do {
+			if (!idle_ranges_ready_) {
+				const auto position = idle_scan_->position();
+				const auto count = std::min<uint64_t>(65536, idle_scan_count_ - position);
+				bytes.resize(count * idle_scan_segment_->unit_size());
+				if (count) {
+					idle_scan_segment_->get_samples(position, position + count, bytes.data());
+					idle_scan_->append(bytes.data(), count);
+				}
+				if (idle_scan_->position() == idle_scan_count_) {
+					idle_scan_->finish();
+					idle_ranges_ready_ = true;
+				}
+			}
+			if (idle_ranges_ready_) {
+				const double rate = idle_scan_segment_->samplerate();
+				const auto origin = idle_scan_segment_->start_time();
+				const auto& ranges = idle_scan_->ranges();
+				uint64_t folded_samples = 0;
+				for (const auto& range : ranges) folded_samples += range.second - range.first;
+				// Reserve readable space for break labels when fitting rare
+				// bursts, without ever expanding a short original interval.
+				const Timestamp display_duration = ranges.empty() ? Timestamp(idle_threshold_) / 100 :
+					max(Timestamp(idle_threshold_) / 100,
+						Timestamp(idle_scan_count_ - folded_samples) / rate * 2 / 3 / ranges.size());
+				while (idle_map_position_ < ranges.size() && budget.elapsed() < 10) {
+					const auto& range = ranges[idle_map_position_++];
+					pending_idle_map_.append(origin + Timestamp(range.first) / rate,
+						origin + Timestamp(range.second) / rate,
+						min(display_duration, Timestamp(range.second - range.first) / rate / 10));
+				}
+				if (idle_map_position_ == ranges.size()) {
+					idle_scan_timer_.stop();
+					idle_scan_.reset();
+					idle_scan_segment_.reset();
+					idle_time_map_ = std::move(pending_idle_map_);
+					pending_idle_map_.clear();
+					idle_mapping_updated();
+					if (!idle_time_map_.empty()) zoom_fit(false);
+					idle_compression_changed(true, idle_time_map_.empty() ?
+						tr("No idle intervals at this threshold") :
+						tr("%1 folded pauses").arg(idle_time_map_.gaps().size()));
+					return;
+				}
+			}
+		} while (budget.elapsed() < 10);
+	} catch (const std::exception& e) {
+		reset_idle_compression(QString::fromUtf8(e.what()));
+	}
 }
 
 void View::set_scale(double scale)
@@ -742,6 +956,7 @@ void View::set_time_unit(pv::util::TimeUnit time_unit)
 
 void View::set_current_segment(uint32_t segment_id)
 {
+	if (current_segment_ != segment_id) reset_idle_compression();
 	current_segment_ = segment_id;
 
 	for (const shared_ptr<Signal>& signal : signals_)
@@ -777,6 +992,7 @@ Trace::SegmentDisplayMode View::segment_display_mode() const
 
 void View::set_segment_display_mode(Trace::SegmentDisplayMode mode)
 {
+	if (segment_display_mode_ != mode) reset_idle_compression();
 	segment_display_mode_ = mode;
 
 	for (const shared_ptr<Signal>& signal : signals_)
@@ -843,7 +1059,8 @@ void View::zoom_fit(bool gui_state)
 	}
 
 	const pair<Timestamp, Timestamp> extents = get_time_extents();
-	const Timestamp delta = extents.second - extents.first;
+	const Timestamp delta = idle_time_map_.to_display(extents.second) -
+		idle_time_map_.to_display(extents.first);
 	if (delta < Timestamp("1e-12"))
 		return;
 
@@ -864,6 +1081,15 @@ void View::focus_on_range(uint64_t start_sample, uint64_t end_sample)
 		return;
 
 	const double samplerate = session_.get_samplerate();
+	if (!idle_time_map_.empty() && samplerate > 0) {
+		const Timestamp first = Timestamp(start_sample) / samplerate;
+		const Timestamp last = Timestamp(end_sample) / samplerate;
+		const Timestamp span = idle_time_map_.to_display(last) - idle_time_map_.to_display(first);
+		const Timestamp fit_scale = max(MinScale, min(MaxScale, span * 1.25 / w));
+		set_scale_offset(fit_scale.convert_to<double>(), idle_time_map_.to_real(
+			idle_time_map_.to_display(first) - span * 0.2));
+		return;
+	}
 	const double samples_per_pixel = samplerate * scale_;
 	const uint64_t viewport_samples = w * samples_per_pixel;
 
@@ -996,9 +1222,8 @@ void View::center_cursors()
 {
 	assert(cursors_);
 
-	const double time_width = scale_ * viewport_->width();
-	cursors_->first()->set_time(offset_ + time_width * 0.4);
-	cursors_->second()->set_time(offset_ + time_width * 0.6);
+	cursors_->first()->set_time(pixel_to_time(viewport_->width() * 0.4));
+	cursors_->second()->set_time(pixel_to_time(viewport_->width() * 0.6));
 
 	ruler_->update();
 	viewport_->update();
@@ -1080,9 +1305,14 @@ int64_t View::get_nearest_level_change(const QPoint &p)
 	// Get data for listed signals
 	for (entry_t &e : list) {
 		// Calculate sample number from cursor position
-		const double samples_per_pixel = e.signal->base()->get_samplerate() * scale();
-		const int64_t x_offset = offset().convert_to<double>() / scale();
-		const int64_t sample_num = max(((x_offset + p.x()) * samples_per_pixel), 0.0);
+		const double rate = e.signal->base()->get_samplerate();
+		if (rate <= 0) continue;
+		Timestamp origin(0);
+		const auto logic = std::dynamic_pointer_cast<LogicSignal>(e.signal);
+		if (logic && logic->get_logic_segment_to_paint())
+			origin = logic->get_logic_segment_to_paint()->start_time();
+		const int64_t sample_num = max(Timestamp(0),
+			(pixel_to_time(p.x()) - origin) * rate).convert_to<int64_t>();
 
 		vector<data::LogicSegment::EdgePair> edges =
 			e.signal->get_nearest_level_changes(sample_num);
@@ -1091,16 +1321,16 @@ int64_t View::get_nearest_level_change(const QPoint &p)
 			continue;
 
 		// Check first edge
-		const int64_t first_sample_delta = abs(sample_num - edges.front().first);
-		const int64_t first_delta = first_sample_delta / samples_per_pixel;
+		const int64_t first_delta = std::abs(time_to_pixel(
+			origin + Timestamp(edges.front().first) / rate) - p.x());
 		e.delta = first_delta;
 		e.sample = edges.front().first;
 
 		// Check second edge if available
 		if (edges.size() == 2) {
 			// Note: -1 because this is usually the right edge and sample points are left-aligned
-			const int64_t second_sample_delta = abs(sample_num - edges.back().first - 1);
-			const int64_t second_delta = second_sample_delta / samples_per_pixel;
+			const int64_t second_delta = std::abs(time_to_pixel(
+				origin + Timestamp(edges.back().first + 1) / rate) - p.x());
 
 			// If both edges are too close, we mark this signal as being dense
 			if ((first_delta + second_delta) <= snap_distance_)
@@ -1212,8 +1442,10 @@ void View::trigger_event(int segment_id, util::Timestamp location)
 void View::get_scroll_layout(double &length, Timestamp &offset) const
 {
 	const pair<Timestamp, Timestamp> extents = get_time_extents();
-	length = ((extents.second - extents.first) / scale_).convert_to<double>();
-	offset = offset_ / scale_;
+	length = ((idle_time_map_.to_display(extents.second) -
+		idle_time_map_.to_display(extents.first)) / scale_).convert_to<double>();
+	offset = idle_time_map_.empty() ? offset_ / scale_ :
+		(idle_time_map_.to_display(offset_) - idle_time_map_.to_display(extents.first)) / scale_;
 }
 
 void View::set_zoom(double scale, int offset)
@@ -1222,9 +1454,9 @@ void View::set_zoom(double scale, int offset)
 	always_zoom_to_fit_ = false;
 	always_zoom_to_fit_changed(false);
 
-	const Timestamp cursor_offset = offset_ + scale_ * offset;
+	const Timestamp cursor_offset = idle_time_map_.to_display(pixel_to_time(offset));
 	const Timestamp new_scale = max(min(Timestamp(scale), MaxScale), MinScale);
-	const Timestamp new_offset = cursor_offset - new_scale * offset;
+	const Timestamp new_offset = idle_time_map_.to_real(cursor_offset - new_scale * offset);
 	set_scale_offset(new_scale.convert_to<double>(), new_offset);
 }
 
@@ -1236,7 +1468,7 @@ void View::calculate_tick_spacing()
 	// Figure out the highest numeric value visible on a label
 	const QSize areaSize = viewport_->size();
 	const Timestamp max_time = max(fabs(offset_),
-		fabs(offset_ + scale_ * areaSize.width()));
+		fabs(pixel_to_time(areaSize.width())));
 
 	double min_width = SpacingIncrement;
 	double label_width, tick_period_width;
@@ -1347,7 +1579,8 @@ void View::update_scroll()
 	} else {
 		hscrollbar->setRange(0, MaxScrollValue);
 		hscrollbar->setSliderPosition(
-			(offset_ * MaxScrollValue / (scale_ * length)).convert_to<double>());
+			(idle_time_map_.empty() ? offset_ * MaxScrollValue / (scale_ * length) :
+			offset * MaxScrollValue / length).convert_to<double>());
 	}
 
 	updating_scroll_ = false;
@@ -1539,15 +1772,20 @@ bool View::eventFilter(QObject *object, QEvent *event)
 			hover_point_ = QPoint(-1, -1);
 
 		update_hover_point();
+		if (object == viewport_ || object == ruler_) {
+			const QString text = idle_gap_text(hover_point_.x());
+			viewport_->setToolTip(text);
+			ruler_->setToolTip(text);
+		}
 
 		if (grabbed_widget_) {
 			int64_t nearest = get_nearest_level_change(hover_point_);
-			pv::util::Timestamp mouse_time = offset_ + hover_point_.x() * scale_;
+			pv::util::Timestamp mouse_time = pixel_to_time(hover_point_.x());
 
 			if (nearest == -1) {
 				grabbed_widget_->set_time(mouse_time);
 			} else {
-				grabbed_widget_->set_time(nearest / get_signal_under_mouse_cursor()->base()->get_samplerate());
+				grabbed_widget_->set_time(snapped_time(nearest));
 			}
 		}
 
@@ -1635,8 +1873,7 @@ void View::update_view_range_metaobject() const
 		// Note: sample_num = time * samplerate
 		// Note: samples_per_pixel = samplerate * scale
 		const int64_t start_sample = (offset_ * samplerate).convert_to<int64_t>();
-		const int64_t end_sample = (offset_ * samplerate).convert_to<int64_t>() +
-			(w * session_.get_samplerate() * scale_);
+		const int64_t end_sample = (pixel_to_time(w) * samplerate).convert_to<int64_t>();
 
 		MetadataObject* md_obj =
 			session_.metadata_obj_manager()->find_object_by_type(MetadataObjMainViewRange);
@@ -1679,7 +1916,7 @@ void View::update_hover_point()
 	// Hover point is -1 when invalid and 0 for the header
 	if (hover_point_.x() > 0) {
 		// Notify global listeners
-		pv::util::Timestamp mouse_time = offset_ + hover_point_.x() * scale_;
+		pv::util::Timestamp mouse_time = pixel_to_time(hover_point_.x());
 		int64_t sample_num = (mouse_time * session_.get_samplerate()).convert_to<int64_t>();
 
 		MetadataObject* md_obj =
@@ -1711,6 +1948,12 @@ void View::time_item_appearance_changed(bool label, bool content)
 
 void View::extents_changed(bool horz, bool vert)
 {
+	if (horz && idle_compression_enabled_)
+		for (const auto& signal : signals_)
+			if (signal->enabled() && !std::dynamic_pointer_cast<LogicSignal>(signal)) {
+				reset_idle_compression(tr("Idle compression requires digital traces only"));
+				break;
+			}
 	sticky_events_ |=
 		(horz ? TraceTreeItemHExtentsChanged : 0) |
 		(vert ? TraceTreeItemVExtentsChanged : 0);
@@ -1767,7 +2010,14 @@ void View::h_scroll_value_changed(int value)
 	}
 
 	const int range = scrollarea_->horizontalScrollBar()->maximum();
-	if (range < MaxScrollValue)
+	if (!idle_time_map_.empty()) {
+		double length = 0; Timestamp ignored;
+		get_scroll_layout(length, ignored);
+		const auto origin = idle_time_map_.to_display(get_time_extents().first);
+		const double pixels = range < MaxScrollValue ? double(value) :
+			std::max(0.0, length - viewport_->width()) * value / MaxScrollValue;
+		set_offset(idle_time_map_.to_real(origin + scale_ * pixels));
+	} else if (range < MaxScrollValue)
 		set_offset(scale_ * value);
 	else {
 		double length = 0;
@@ -1808,6 +2058,7 @@ void View::on_grab_ruler(int ruler_id)
 
 void View::signals_changed()
 {
+	reset_idle_compression();
 	using sigrok::Channel;
 
 	lock_guard<mutex> lock(signal_mutex_);
@@ -1993,6 +2244,7 @@ void View::signals_changed()
 
 void View::capture_state_updated(int state)
 {
+	if (state != Session::Stopped) reset_idle_compression();
 	GlobalSettings settings;
 
 	if (state == Session::Running) {
@@ -2064,6 +2316,7 @@ void View::on_segment_completed(int segment_id)
 
 void View::on_segment_changed(int segment)
 {
+	reset_idle_compression();
 	switch (segment_display_mode_) {
 	case Trace::ShowLastSegmentOnly:
 	case Trace::ShowSingleSegmentOnly:

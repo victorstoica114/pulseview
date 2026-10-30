@@ -21,6 +21,7 @@
 #define PULSEVIEW_PV_VIEWS_TRACE_LOGICSIGNAL_HPP
 
 #include <QCache>
+#include <functional>
 #include <QAction>
 #include <QColor>
 #include <QDebug>
@@ -107,14 +108,12 @@ public:
 	 * @return The changes left and right of the given position
 	 */
 	virtual vector<data::LogicSegment::EdgePair> get_nearest_level_changes(uint64_t sample_pos);
+	shared_ptr<pv::data::LogicSegment> get_logic_segment_to_paint() const;
 
 protected:
 	void paint_caps(QPainter &p, QLineF *const lines,
 		vector< pair<int64_t, bool> > &edges,
-		bool level, double samples_per_pixel, double pixels_offset,
-		float x_offset, float y_offset);
-
-	shared_ptr<pv::data::LogicSegment> get_logic_segment_to_paint() const;
+		bool level, const std::function<double(int64_t)>& sample_x, float y_offset);
 
 	void init_trigger_actions(QWidget *parent);
 

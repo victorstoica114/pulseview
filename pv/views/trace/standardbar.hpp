@@ -25,6 +25,8 @@
 
 #include <QAction>
 #include <QSpinBox>
+#include <QDoubleSpinBox>
+#include <QLabel>
 #include <QToolBar>
 #include <QToolButton>
 #include <QWidget>
@@ -73,6 +75,9 @@ protected:
 	QAction *const action_view_zoom_out_;
 	QAction *const action_view_zoom_fit_;
 	QAction *const action_view_show_cursors_;
+	QAction *const action_compress_idle_;
+	QDoubleSpinBox *idle_threshold_sb_;
+	QLabel *idle_status_;
 
 	QToolButton *segment_display_mode_selector_;
 	QAction *const action_sdm_last_;

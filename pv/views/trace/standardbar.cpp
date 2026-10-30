@@ -20,6 +20,7 @@
 
 #include <QAction>
 #include <QMessageBox>
+#include <QSignalBlocker>
 
 #include "standardbar.hpp"
 #include "view.hpp"
@@ -42,6 +43,9 @@ StandardBar::StandardBar(Session &session, QWidget *parent,
 	action_view_zoom_out_(new QAction(this)),
 	action_view_zoom_fit_(new QAction(this)),
 	action_view_show_cursors_(new QAction(this)),
+	action_compress_idle_(new QAction(tr("Compress idle"), this)),
+	idle_threshold_sb_(new QDoubleSpinBox(this)),
+	idle_status_(new QLabel(this)),
 	segment_display_mode_selector_(new QToolButton(this)),
 	action_sdm_last_(new QAction(this)),
 	action_sdm_last_complete_(new QAction(this)),
@@ -80,6 +84,32 @@ StandardBar::StandardBar(Session &session, QWidget *parent,
 	connect(action_view_show_cursors_, SIGNAL(triggered(bool)),
 		this, SLOT(on_actionViewShowCursors_triggered()));
 	action_view_show_cursors_->setText(tr("Show &Cursors"));
+
+	action_compress_idle_->setObjectName("actionCompressIdle");
+	action_compress_idle_->setCheckable(true);
+	action_compress_idle_->setToolTip(tr("Visually fold constant intervals on all recorded digital inputs. Real times and saved samples stay unchanged."));
+	idle_threshold_sb_->setObjectName("idleThreshold");
+	idle_threshold_sb_->setDecimals(3);
+	idle_threshold_sb_->setRange(0.001, 1000000);
+	idle_threshold_sb_->setPrefix(tr("Idle >= "));
+	idle_threshold_sb_->setSuffix(tr(" ms"));
+	idle_threshold_sb_->setValue(view_->idle_threshold() * 1000);
+	idle_threshold_sb_->setToolTip(tr("Minimum unchanged interval to fold"));
+	idle_status_->setObjectName("idleCompressionStatus");
+	idle_status_->setMaximumWidth(200);
+	connect(action_compress_idle_, &QAction::toggled, view_, &View::set_idle_compression);
+	connect(idle_threshold_sb_, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
+		view_, [view](double ms) { view->set_idle_threshold(ms / 1000); });
+	connect(view_, &View::idle_compression_changed, this, [this](bool enabled, const QString& status) {
+		const QSignalBlocker blocker(action_compress_idle_);
+		action_compress_idle_->setChecked(enabled);
+		idle_status_->setText(status);
+		idle_status_->setToolTip(status);
+	});
+	connect(&session_, &Session::capture_state_changed, this, [this](int state) {
+		action_compress_idle_->setEnabled(state == Session::Stopped);
+		idle_threshold_sb_->setEnabled(state == Session::Stopped);
+	});
 
 	action_sdm_last_->setIcon(QIcon(":/icons/view-displaymode-last_segment.svg"));
 	action_sdm_last_->setText(tr("Display last segment only"));
@@ -145,6 +175,9 @@ void StandardBar::add_toolbar_widgets()
 	addAction(action_view_zoom_fit_);
 	addSeparator();
 	addAction(action_view_show_cursors_);
+	addAction(action_compress_idle_);
+	addWidget(idle_threshold_sb_);
+	addWidget(idle_status_);
 	multi_segment_actions_.push_back(addSeparator());
 	multi_segment_actions_.push_back(addWidget(segment_display_mode_selector_));
 	multi_segment_actions_.push_back(addWidget(segment_selector_));

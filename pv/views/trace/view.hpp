@@ -38,6 +38,8 @@
 #include <pv/views/viewbase.hpp>
 
 #include "cursorpair.hpp"
+#include "idletimemap.hpp"
+#include <pv/data/idlescan.hpp>
 #include "flag.hpp"
 #include "trace.hpp"
 #include "tracetreeitemowner.hpp"
@@ -58,6 +60,7 @@ class Session;
 
 namespace data {
 class Logic;
+class LogicSegment;
 }
 
 namespace views {
@@ -167,6 +170,19 @@ public:
 	 * Returns the view time scale in seconds per pixel.
 	 */
 	double scale() const;
+
+	// Real timestamps at the boundary; display warping is confined here.
+	double time_to_pixel(const pv::util::Timestamp& time) const;
+	pv::util::Timestamp pixel_to_time(double x) const;
+	const IdleTimeMap& idle_time_map() const { return idle_time_map_; }
+	bool idle_compression_enabled() const { return idle_compression_enabled_; }
+	bool idle_compression_pending() const { return bool(idle_scan_); }
+	double idle_threshold() const { return idle_threshold_; }
+	void set_idle_compression(bool enabled);
+	void set_idle_threshold(double seconds);
+	vector<const IdleTimeMap::Gap*> visible_idle_gaps(int width) const;
+	QString idle_gap_text(double x) const;
+	pv::util::Timestamp snapped_time(int64_t sample) const;
 
 	/**
 	 * Returns the internal view version of the time offset of the left edge
@@ -334,6 +350,8 @@ public:
 	void on_setting_changed(const QString &key, const QVariant &value);
 
 Q_SIGNALS:
+	void time_mapping_changed();
+	void idle_compression_changed(bool enabled, QString status);
 	void hover_point_changed(const QWidget* widget, const QPoint &hp);
 
 	void selection_changed();
@@ -374,6 +392,10 @@ public Q_SLOTS:
 	void trigger_event(int segment_id, util::Timestamp location);
 
 private:
+	void reset_idle_compression(const QString& status = QString());
+	void process_idle_scan();
+	void idle_mapping_updated();
+
 	void get_scroll_layout(double &length, pv::util::Timestamp &offset) const;
 
 	/**
@@ -526,6 +548,18 @@ private:
 
 	/// The view time scale in seconds per pixel.
 	double scale_;
+	IdleTimeMap idle_time_map_;
+	IdleTimeMap pending_idle_map_;
+	bool idle_compression_enabled_ = false;
+	double idle_threshold_ = 0.001;
+	double idle_plain_scale_ = 0;
+	pv::util::Timestamp idle_plain_offset_ = 0;
+	QTimer idle_scan_timer_;
+	std::unique_ptr<data::IdleScan> idle_scan_;
+	shared_ptr<data::LogicSegment> idle_scan_segment_;
+	uint64_t idle_scan_count_ = 0;
+	size_t idle_map_position_ = 0;
+	bool idle_ranges_ready_ = false;
 
 	/// The internal view version of the time offset in seconds.
 	pv::util::Timestamp offset_;

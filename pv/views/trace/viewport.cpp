@@ -100,7 +100,7 @@ void Viewport::drag_by(const QPoint &delta)
 		return;
 
 	view_.set_scale_offset(view_.scale(),
-		(*drag_offset_ - delta.x() * view_.scale()));
+		view_.idle_time_map().to_real(view_.idle_time_map().to_display(*drag_offset_) - delta.x() * view_.scale()));
 
 	if (allow_vertical_dragging_)
 		view_.set_v_offset(-drag_v_offset_ - delta.y());
@@ -144,16 +144,16 @@ bool Viewport::touch_event(QTouchEvent *event)
 
 	if (!pinch_zoom_active_ ||
 		(event->touchPointStates() & QEventPoint::Pressed)) {
-		pinch_offset0_ = (view_.offset() + view_.scale() * touchPoint0.position().x()).convert_to<double>();
-		pinch_offset1_ = (view_.offset() + view_.scale() * touchPoint1.position().x()).convert_to<double>();
+		pinch_offset0_ = view_.idle_time_map().to_display(view_.pixel_to_time(touchPoint0.position().x()));
+		pinch_offset1_ = view_.idle_time_map().to_display(view_.pixel_to_time(touchPoint1.position().x()));
 		pinch_zoom_active_ = true;
 	}
 
 	double w = touchPoint1.position().x() - touchPoint0.position().x();
 	if (abs(w) >= 1.0) {
 		const double scale =
-			fabs((pinch_offset1_ - pinch_offset0_) / w);
-		double offset = pinch_offset0_ - touchPoint0.position().x() * scale;
+			abs((pinch_offset1_ - pinch_offset0_) / w).convert_to<double>();
+		const auto offset = view_.idle_time_map().to_real(pinch_offset0_ - touchPoint0.position().x() * scale);
 		if (scale > 0)
 			view_.set_scale_offset(scale, offset);
 	}
@@ -167,16 +167,16 @@ bool Viewport::touch_event(QTouchEvent *event)
 
 	if (!pinch_zoom_active_ ||
 	    (event->touchPointStates() & Qt::TouchPointPressed)) {
-		pinch_offset0_ = (view_.offset() + view_.scale() * touchPoint0.pos().x()).convert_to<double>();
-		pinch_offset1_ = (view_.offset() + view_.scale() * touchPoint1.pos().x()).convert_to<double>();
+		pinch_offset0_ = view_.idle_time_map().to_display(view_.pixel_to_time(touchPoint0.pos().x()));
+		pinch_offset1_ = view_.idle_time_map().to_display(view_.pixel_to_time(touchPoint1.pos().x()));
 		pinch_zoom_active_ = true;
 	}
 
 	double w = touchPoint1.pos().x() - touchPoint0.pos().x();
 	if (abs(w) >= 1.0) {
 		const double scale =
-			fabs((pinch_offset1_ - pinch_offset0_) / w);
-		double offset = pinch_offset0_ - touchPoint0.pos().x() * scale;
+			abs((pinch_offset1_ - pinch_offset0_) / w).convert_to<double>();
+		const auto offset = view_.idle_time_map().to_real(pinch_offset0_ - touchPoint0.pos().x() * scale);
 		if (scale > 0)
 			view_.set_scale_offset(scale, offset);
 	}
@@ -241,6 +241,14 @@ void Viewport::paintEvent(QPaintEvent*)
 			(r.get()->*(*paint_func))(p, row_pp);
 	}
 
+	for (const auto gap : view_.visible_idle_gaps(width())) {
+		const double x1 = std::max(0.0, view_.time_to_pixel(gap->begin));
+		const double x2 = std::min(double(width()), view_.time_to_pixel(gap->end));
+		p.fillRect(QRectF(x1, 0, x2 - x1, height()), QColor(150, 130, 60, 22));
+		p.setPen(QPen(QColor(150, 130, 60, 140), 1, Qt::DashLine));
+		p.drawLine(QPointF(x1, 0), QPointF(x1, height()));
+		p.drawLine(QPointF(x2, 0), QPointF(x2, height()));
+	}
 	p.end();
 }
 
@@ -286,7 +294,7 @@ void Viewport::wheelEvent(QWheelEvent *event)
 			// acts as horizontal scrolling like in Gimp
 			// and Inkscape.
 			view_.set_scale_offset(view_.scale(),
-				- delta * view_.scale() + view_.offset());
+				view_.pixel_to_time(-delta));
 		} else {
 			// Vertical scrolling is interpreted as zooming in/out
 #if QT_VERSION >= QT_VERSION_CHECK(5, 14, 0)
@@ -302,7 +310,7 @@ void Viewport::wheelEvent(QWheelEvent *event)
 #endif
 		// Horizontal scrolling is interpreted as moving left/right
 		view_.set_scale_offset(view_.scale(),
-			delta * view_.scale() + view_.offset());
+			view_.pixel_to_time(delta));
 	}
 }
 
