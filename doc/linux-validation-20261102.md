@@ -142,3 +142,45 @@ They also differ from the USB handover case in which DL32 identification fails.
 The exact cause remains open, and the additional memory candidate remains
 private and unqualified. This documentation update changes no product code,
 installed executable, USB behavior or firmware. Windows remains deferred.
+
+## Export worker creation failure
+
+Export startup now reports a worker creation failure through the existing
+save-error dialog. Previously the std::thread exception escaped StoreSession's
+start path, for both ordinary exports and collections. The regular export's
+thread construction is now inside its existing exception handler; collection
+startup has the same error-return behavior. No exception hook or allocator
+change is added to the application.
+
+On Linux VMware, a standalone fixture interposes pthread_create only in its
+own process and returns EAGAIN for the selected export worker. The published
+implementation fails six startup contracts; the corrected source passes all14
+fault/control cases, covering binary, srzip, collection and a nested collection
+worker at2048 and2621441samples. In-memory source bytes stay exact, no failed
+export emits success, and fresh exports/replays produce identical data.
+Independent ZIP/CRC/SHA/payload and sample metadata checks cover all six normal
+controls. All77frontend regressions pass. The real XCB StoreProgress dialog
+shows the failure in all three export modes, returns normally and permits a
+fresh exact export using the same captured Session.
+
+The complete installed-form GUI also saves and reopens a10MiB-plus-four-byte
+srzip recording; all ZIP members, data and metadata are identical. Its SHA256
+is `89c993267e326db21a6e30c7ce3deea56fc2c3f56565518a57c63d412721a1b8`.
+This is an export-startup exception correction. USB acquisition, segment memory,
+file formats and normal worker execution are unchanged. Physical capture is
+excepted because the change handles host export startup only; no USB access
+occurred in these tests. Windows of this exact tree remains deferred. Isolated
+EAGAIN injection does not simulate machine-wide thread or memory exhaustion,
+and this change adds no promise of atomic replacement for ordinary exports.
+The separate first-data/USB/early-compaction limitations above remain open.
+
+The optional Linux diagnostic reuses a completed pulseview-test build made
+with the Unix Makefiles generator. It is not linked into the application:
+
+```sh
+python3 contrib/check-store-thread.py /path/to/build /path/to/new-evidence-dir
+```
+
+The evidence directory must not exist. Build commands, object hashes, outputs
+and results are retained there. The program scans no hardware and requires the
+same runtime libraries as the frontend build.

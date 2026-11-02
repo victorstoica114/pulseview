@@ -110,7 +110,12 @@ bool StoreSession::start()
 				error_ = tr("Capture collections currently support digital inputs only.");
 				return false;
 			}
-		thread_ = std::thread(&StoreSession::store_collection_proc, this);
+		try {
+			thread_ = std::thread(&StoreSession::store_collection_proc, this);
+		} catch (const std::exception& error) {
+			error_ = tr("Error while saving: ") + error.what();
+			return false;
+		}
 		return true;
 	}
 	const vector< shared_ptr<data::SignalBase> > sigs(session_.signalbases());
@@ -217,13 +222,13 @@ bool StoreSession::start()
 
 		auto header = context->create_header_packet(session_.get_acquisition_start_time());
 		output_->receive(header);
+
+		thread_ = std::thread(&StoreSession::store_proc, this,
+			achannel_list, asegment_list, lsegment);
 	} catch (const std::exception& error) {
 		error_ = tr("Error while saving: ") + error.what();
 		return false;
 	}
-
-	thread_ = std::thread(&StoreSession::store_proc, this,
-		achannel_list, asegment_list, lsegment);
 
 	// Save session setup if we're saving to srzip and the user wants it
 	GlobalSettings settings;
