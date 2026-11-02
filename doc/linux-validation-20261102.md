@@ -184,3 +184,31 @@ python3 contrib/check-store-thread.py /path/to/build /path/to/new-evidence-dir
 The evidence directory must not exist. Build commands, object hashes, outputs
 and results are retained there. The program scans no hardware and requires the
 same runtime libraries as the frontend build.
+
+
+## File-open error reporting, 3 November 2026
+
+Opening a missing or malformed file displayed the cause in set_device(), then
+load_file() displayed a second generic warning without further information.
+The minimal fix retains the existing cause-bearing dialog and early return,
+and removes only the duplicate notification. A regression covers missing sr
+and collection files, invalid ZIP and malformed collection JSON. Linked against
+the retained old Session object, this exact new regression fails with two
+dialogs instead of one; all 78 current frontend regressions pass on Linux.
+
+An isolated native XCB MainWindow/Session test passes 25 collection inputs and
+23 immediate recoveries in the failed Session. It covers 17 open-time rejections,
+six later-frame failures, v1/v2 and sample origins above2^53. Completed earlier
+frames and delivered partial data retain their own outcomes; a separately
+loaded healthy Session stays byte-exact. Each failure has one dialog, and the
+next valid load restores all three frames, triggers and origins. The complete
+installed-form GUI also shows one warning and opens the valid three-frame
+collection after one acknowledgment. Core/C++/SDK hashes match the installed
+qualified Linux libraries. Inputs are synthetic and no hardware is scanned.
+
+This qualifies only the Linux host file-open path (VMware, Qt5/XCB). Windows
+execution remains deferred by the owner. Hardware is excepted because this
+change only removes a redundant GUI notification; acquisition, transport,
+firmware and file parsing are unchanged. No new acquisition integrity or
+corrupt-file fuzzing guarantee is claimed. AUD013/022 and the earlier transport
+limits remain open.

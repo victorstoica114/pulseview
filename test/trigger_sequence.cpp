@@ -26,6 +26,7 @@
 #include <zip.h>
 #include <QLineEdit>
 #include <QMainWindow>
+#include <QMessageBox>
 #include <QListWidget>
 #include <QPushButton>
 #include <QPointer>
@@ -1584,6 +1585,43 @@ BOOST_AUTO_TEST_CASE(dla32_continuous_windows_hardware_opt_in)
 	report.write(QJsonDocument(QJsonObject{{"samplerate",QString::number(rate)},{"count",int(target)},
 		{"sparse",sparse},{"elapsed_ms",double(elapsed.elapsed())},{"frames",frames},
 		{"settings_restored",true},{"readback_verified",true}}).toJson());
+}
+
+BOOST_AUTO_TEST_CASE(file_open_failure_reports_its_cause_once)
+{
+	Fixture f; pv::DeviceManager manager(f.context, "", false);
+	QTemporaryDir directory;
+	const auto invalid = directory.filePath("invalid.srcollection");
+	{ QFile file(invalid); BOOST_REQUIRE(file.open(QIODevice::WriteOnly)); file.write("not a ZIP"); }
+	const auto bad_json = directory.filePath("bad-json.srcollection");
+	int error = 0;
+	auto zip = zip_open(bad_json.toUtf8().constData(), ZIP_CREATE, &error);
+	BOOST_REQUIRE(zip);
+	auto source = zip_source_buffer(zip, "{", 1, 0);
+	BOOST_REQUIRE(source);
+	BOOST_REQUIRE(zip_file_add(zip, "pulseview-frames.json", source, 0) >= 0);
+	BOOST_REQUIRE_EQUAL(zip_close(zip), 0);
+	for (const auto& path : QStringList{directory.filePath("missing.sr"),
+			directory.filePath("missing.srcollection"), invalid, bad_json}) {
+		pv::Session session(manager, "failed file open");
+		QStringList messages;
+		QTimer dismiss;
+		QObject::connect(&dismiss, &QTimer::timeout, [&] {
+			for (auto widget : QApplication::topLevelWidgets())
+				if (auto box = qobject_cast<QMessageBox*>(widget); box && box->isVisible()) {
+					messages.append(box->text());
+					box->accept();
+				}
+		});
+		dismiss.start(5);
+		BOOST_CHECK_NO_THROW(session.load_file(path, {}, nullptr, {}));
+		dismiss.stop();
+		BOOST_CHECK(!session.device());
+		BOOST_CHECK_EQUAL(session.get_capture_state(), pv::Session::Stopped);
+		BOOST_REQUIRE_EQUAL(messages.size(), 1);
+		BOOST_CHECK(messages.front().startsWith("Failed to open device\n\n"));
+		BOOST_CHECK(!messages.front().endsWith("\n\n"));
+	}
 }
 
 BOOST_AUTO_TEST_CASE(collection_rejects_bad_metadata_and_defers_packet_errors_safely)

@@ -856,10 +856,8 @@ void Session::load_file(QString file_name, QString setup_file_name,
 		return;
 	}
 
-	if (!device_) {
-		MainWindow::show_session_error(errorMessage, "");
+	if (!device_)
 		return;
-	}
 
 	// Use the input file with .pvs extension if no setup file was given
 	if (setup_file_name.isEmpty()) {
