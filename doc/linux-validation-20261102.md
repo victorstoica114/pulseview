@@ -14,9 +14,9 @@ includes the previously reviewed startup log-level and decoder ownership/
 progress corrections, plus rejection of analog idle compression and safe
 edge snapping when an analog signal has no converted logic data.
 
-## Verified scope
+## Initial fork validation
 
-The final source content passes all 77 frontend regressions with Qt 5.15.19
+The initial fork source content passes all 77 frontend regressions with Qt 5.15.19
 on Linux in VMware. The new shown-toolbar contract has 114 assertions;
 substituting the old MainBar implementation fails 22 of them. It covers
 initially enabled/disabled mode, repeated toggles and device/file transitions.
@@ -34,7 +34,7 @@ of 200000 samples at each rate, saves/restores the setup and reopens both
 collections. All six frames match independently transposed RAW on all 32
 channels and replay byte-for-byte through the SDK. At Pre50%, the marker is
 at sample100000 on the closing HIGH edge, with widths2samples at5MS/s and
-25samples at50MS/s. The 50MS/s GUI capture uses the installed-form executable
+25samples at50MS/s. The initial 50MS/s GUI capture uses the installed-form executable
 whose SHA256 is `08cae7aae20ab5cf44fc30b7824fddbb3418967b1c30a44bc40c8776f8e2872e`.
 The menu launch and saved-collection display also pass on native Wayland.
 
@@ -63,3 +63,54 @@ experimental segment-memory candidate are not resolved or promoted here.
 The `--clean --settings` startup path without an input file was not validated;
 the GUI checks use Restore Session Setup explicitly. Hardware sample rate
 and depth are configured separately from the saved frontend setup.
+
+## Storage allocation follow-up
+
+Two host storage ownership defects were reproduced with controlled allocation
+failures. Compacting the final chunk removed and reinserted its deque entry;
+if reinsertion allocated a node and failed, the final stored samples became
+unreachable. Growing a chunk could delete the still-owned previous chunk when
+the first allocation failed, or leak a newly allocated chunk when deque
+publication failed. Both bulk and single-sample append paths are covered.
+
+Compaction now replaces the existing pointer directly. Append paths keep the
+new array in a local unique_ptr until the container accepts it, then transfer
+ownership. The temporary memory reserve, chunk sizes, padding, sample-count
+commit point and compaction timing remain unchanged. This does not enable
+the separate experimental early compaction of completed frames.
+
+The final Linux tree passes77frontend regressions and31standalone fault cases.
+The original compaction fails at64/128/1024deque entries on this libstdc++;
+separate negative controls reproduce deletion of retained storage and leaks
+after failed publication in each append path. The test uses small chunks
+with normal production append/read methods and verifies every accepted byte,
+sample/chunk counts and allocation ownership. Negative controls stop before
+reading or destroying known-invalid storage. These are isolated test-process
+failures, not induced machine-wide memory exhaustion.
+
+With the final source, real Linux captures at5/50MS/s each retain three event
+windows, export and replay. All six frames (66MB total) match independent
+all32 RAW transposition, archive payloads and Session replay. Numbered UART
+messages agree with a second decoder and remain consecutive in the observed
+windows; D0 periods stay within one sample. The exact installed-form GUI also
+loads, switches frames, saves and reopens a60MB collection with unchanged
+data, origins and trigger metadata. That installed executable has SHA256
+`fa9c85c3d99edd9e1e468bc13496bd2bd2bef2c5c675857663e0002942845aab`;
+its menu launch is also checked on native Wayland. Explicit `--settings` with
+an input file restores the labelled channel as documented by the man page.
+
+Windows for this follow-up remains deferred. Normal hardware captures check
+the surrounding storage/export flow; they do not reproduce electrical faults
+or actual memory exhaustion. Earlier Stream/USB handover limits remain open.
+
+The optional diagnostic runs in its own process and does not change the
+application allocator. From the source root with Qt5 development tools:
+
+```sh
+task_tmp=$(mktemp -d)
+moc "$PWD/pv/data/segment.hpp" -o "$task_tmp/moc_segment.cpp"
+c++ -std=c++17 -O1 -fPIC -I. contrib/check-segment-compaction.cpp \
+    pv/data/segment.cpp "$task_tmp/moc_segment.cpp" \
+    $(pkg-config --cflags --libs Qt5Widgets) -o "$task_tmp/check-segment"
+"$task_tmp/check-segment"
+```
