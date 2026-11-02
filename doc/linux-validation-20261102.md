@@ -46,6 +46,8 @@ VM disks, vendor runtime or authentication material.
 ## Limits
 
 The current complete frontend tree is qualified for the Linux cases above.
+Subsequent transition stress revealed the intermittent first-data failures
+described below; they remain an open qualification limit.
 Windows validation of this exact tree remains deferred; earlier Windows
 results for individual fixes do not qualify the current combined update.
 This is not a claim of arbitrary-channel continuity, every rate/condition
@@ -114,3 +116,29 @@ c++ -std=c++17 -O1 -fPIC -I. contrib/check-segment-compaction.cpp \
     $(pkg-config --cflags --libs Qt5Widgets) -o "$task_tmp/check-segment"
 "$task_tmp/check-segment"
 ```
+
+## Subsequent Stream startup observations
+
+Further Linux VMware stress at50MS/s used a native XCB Qt View while capturing,
+stopped during an active window, repeated Stream windows and returned to a
+finite Stream capture. One finite hardware-triggered start produced no RAW
+bytes before the test's20second Stop. A control using the published storage
+implementation, without private early compaction, then stalled at an
+untriggered continuous start after the partial-frame Stop. The driver reported
+its first-data timeout after approximately3seconds; all eight transfers retired
+with zero bytes and END was delivered. The completed and partial windows before
+the failed starts remain preserved and independently checked against RAW.
+
+Both runs used the active Linux libsigrok whose SHA256 begins84c0c7da, with the
+same C++ wrapper and decoder SDK. DL32 identification still worked after both
+failures. A subsequent published-implementation control retained three event
+windows at50MS/s (60MB), with independent RAW conversion, archive/replay and
+bounded D0/D22 UART/timing checks, without USB reset, replug or VM handover.
+
+These are intermittent no-data startup observations, not evidence that the
+private memory candidate, WCH code or firmware caused them. The triggered
+finite observation and untriggered timeout may have different internal causes.
+They also differ from the USB handover case in which DL32 identification fails.
+The exact cause remains open, and the additional memory candidate remains
+private and unqualified. This documentation update changes no product code,
+installed executable, USB behavior or firmware. Windows remains deferred.
