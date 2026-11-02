@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 #include <boost/test/unit_test.hpp>
 #include <pv/data/streamwindows.hpp>
+#include <pv/softwaretrigger.hpp>
 #include <array>
 
 using pv::data::StreamWindows;
@@ -115,6 +116,75 @@ BOOST_AUTO_TEST_CASE(warmup_is_not_fabricated_and_invalid_packets_fail)
 	BOOST_CHECK_THROW(StreamWindows(1,4,4,1,{t},[](StreamWindows::Window&&){}),std::invalid_argument);
 	StreamWindows wide(4,8,3,1,{t},[](StreamWindows::Window&&){});
 	BOOST_CHECK_THROW(wide.feed(input.data(),3),std::invalid_argument);
+}
+
+BOOST_AUTO_TEST_CASE(software_or_matches_either_channel_without_initial_edge)
+{
+	std::vector<uint8_t> samples{3,3,3,2,2,2,2,2,3,3,3,1,1,1,1};
+	WindowTriggerStage stage; stage.any = true; stage.falling = 3;
+	for (size_t chunk = 1; chunk <= samples.size(); ++chunk) {
+		std::vector<uint64_t> triggers;
+		StreamWindows stream(1,3,1,2,{stage},[&](StreamWindows::Window&& w) { triggers.push_back(w.origin+w.trigger_offset); });
+		for (size_t i=0;i<samples.size();i+=chunk) stream.feed(samples.data()+i,std::min(chunk,samples.size()-i));
+		BOOST_REQUIRE_EQUAL(triggers.size(),2);
+		BOOST_CHECK_EQUAL(triggers[0],3);
+		BOOST_CHECK_EQUAL(triggers[1],11);
+	}
+}
+
+BOOST_AUTO_TEST_CASE(pulse_comparisons_are_exact_and_ignore_initial_partial_pulse)
+{
+	// At 1 MHz the complete HIGH pulses span [5,7), [10,13), [16,20).
+	const std::vector<uint8_t> samples{1,1,0,0,0,1,1,0,0,0,1,1,1,0,0,0,1,1,1,1,0,0,0};
+	for (const auto polarity : {false,true})
+	for (const auto comparison : {pv::PulseComparison::Less,pv::PulseComparison::Greater,pv::PulseComparison::Between}) {
+		pv::SoftwareTrigger config; config.enabled = true;
+		config.conditions.push_back({0,polarity?pv::SoftwareTriggerKind::HighPulse:pv::SoftwareTriggerKind::LowPulse,
+			comparison,3000,3000});
+		const auto stage=pv::compile_software_trigger(config,1000000,1);
+		for (size_t chunk=1;chunk<=samples.size();++chunk) {
+			std::vector<uint64_t> triggers;
+			StreamWindows stream(1,2,0,10,{stage},[&](StreamWindows::Window&& w){triggers.push_back(w.origin);});
+			std::vector<uint8_t> input=samples;
+			if (!polarity) for(auto& sample:input) sample ^= 1;
+			for(size_t i=0;i<input.size();i+=chunk) stream.feed(input.data()+i,std::min(chunk,input.size()-i));
+			BOOST_REQUIRE_EQUAL(triggers.size(),1);
+			BOOST_CHECK_EQUAL(triggers[0],comparison==pv::PulseComparison::Less?7:comparison==pv::PulseComparison::Greater?20:13);
+		}
+	}
+	BOOST_CHECK_EQUAL(pv::pulse_time_samples(100,25000000,false),2);
+	BOOST_CHECK_EQUAL(pv::pulse_time_samples(100,25000000,true),3);
+	BOOST_CHECK_EQUAL(pv::pulse_time_samples(120,25000000,true),3);
+	BOOST_CHECK_THROW(pv::pulse_time_samples(UINT64_MAX,UINT64_MAX,true),std::invalid_argument);
+}
+
+BOOST_AUTO_TEST_CASE(pulse_state_survives_active_window_and_or_combines_pulse_with_edge)
+{
+	// D0 rises at 3 (first window); D1 HIGH begins at 4 inside that
+	// window and closes at 10. Its measured width must still be six.
+	std::vector<uint8_t> samples{0,0,0,1,3,3,3,3,3,3,1,1,1};
+	WindowTriggerStage stage;stage.any=true;stage.rising=1;
+	stage.pulses.push_back({1,true,6,6});
+	std::vector<uint64_t> triggers;
+	StreamWindows stream(1,5,1,2,{stage},[&](StreamWindows::Window&& w){triggers.push_back(w.origin+w.trigger_offset);});
+	stream.feed(samples.data(),samples.size());stream.finish();
+	BOOST_REQUIRE_EQUAL(triggers.size(),2);
+	BOOST_CHECK_EQUAL(triggers[0],3);BOOST_CHECK_EQUAL(triggers[1],10);
+	BOOST_CHECK_EQUAL(stream.completed(),1); // final partial window is retained
+}
+
+BOOST_AUTO_TEST_CASE(pulse_bound_validation_and_high_channel)
+{
+	pv::SoftwareTrigger config;config.enabled=true;
+	config.conditions.push_back({63,pv::SoftwareTriggerKind::HighPulse,pv::PulseComparison::Between,100,120});
+	const auto stage=pv::compile_software_trigger(config,25000000,UINT64_C(1)<<63);
+	BOOST_REQUIRE_EQUAL(stage.pulses.size(),1);
+	BOOST_CHECK_EQUAL(stage.pulses[0].minimum,3);BOOST_CHECK_EQUAL(stage.pulses[0].maximum,3);
+	BOOST_CHECK_THROW(pv::compile_software_trigger(config,25000000,1),std::invalid_argument);
+	config.conditions[0].upper_ns=110;
+	BOOST_CHECK_THROW(pv::compile_software_trigger(config,25000000,UINT64_C(1)<<63),std::invalid_argument);
+	config.conditions[0].comparison=pv::PulseComparison::Less;config.conditions[0].lower_ns=40;
+	BOOST_CHECK_THROW(pv::compile_software_trigger(config,25000000,UINT64_C(1)<<63),std::invalid_argument);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

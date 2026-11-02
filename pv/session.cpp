@@ -246,6 +246,7 @@ void Session::save_setup(QSettings &settings) const
 	settings.setValue("captures_per_run", captures_per_run());
 	settings.setValue("stream_windows/enabled", stream_windows_enabled());
 	settings.setValue("stream_windows/pretrigger", window_pretrigger_percent());
+	save_software_trigger(settings, software_trigger_);
 	save_trigger_settings(settings, session(), device_ ? device_->device() : nullptr);
 	int i;
 	int decode_signal_count = 0;
@@ -407,6 +408,7 @@ void Session::restore_setup(QSettings &settings)
 	set_captures_per_run(settings.value("captures_per_run", 1).toUInt());
 	set_stream_windows_enabled(settings.value("stream_windows/enabled", false).toBool());
 	set_window_pretrigger_percent(settings.value("stream_windows/pretrigger", 50).toUInt());
+	set_software_trigger(restore_software_trigger(settings));
 	// Restore channels
 	for (shared_ptr<data::SignalBase> base : signalbases_) {
 		settings.beginGroup(base->internal_name());
@@ -1653,6 +1655,14 @@ catch (const std::exception &error)
 	error_handler(problem);
 }
 
+bool Session::set_software_trigger(const SoftwareTrigger& config)
+{
+	if (get_capture_state() != Stopped) return false;
+	software_trigger_ = config;
+	stream_windows_changed();
+	return true;
+}
+
 void Session::prepare_stream_windows()
 {
 	const auto device = device_->device();
@@ -1680,6 +1690,14 @@ void Session::prepare_stream_windows()
 	const auto percent = window_pretrigger_percent();
 	window_pre_ = std::max<uint64_t>(1, window_depth_ / 100 * percent + window_depth_ % 100 * percent / 100);
 	window_stages_.clear();
+	if (software_trigger_.enabled) {
+		uint64_t enabled = 0;
+		for (const auto& channel : device->channels())
+			if (channel->enabled() && channel->type() == sigrok::ChannelType::LOGIC && channel->index() < 64)
+				enabled |= UINT64_C(1) << channel->index();
+		window_stages_.push_back(compile_software_trigger(software_trigger_, window_rate_, enabled));
+		return;
+	}
 	const auto trigger = session()->trigger();
 	if (!trigger || trigger->stages().empty() || trigger->stages().size() > 64)
 		throw std::runtime_error("Configure a standard digital trigger with one to 64 stages.");

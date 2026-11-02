@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 #include "triggersettings.hpp"
 #include "triggersequence.hpp"
+#include "softwaretrigger.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -12,6 +13,58 @@
 #include <libsigrokcxx/libsigrokcxx.hpp>
 
 namespace pv {
+
+void save_software_trigger(QSettings& settings, const SoftwareTrigger& config)
+{
+	settings.setValue("software_trigger/version", 1);
+	settings.setValue("software_trigger/enabled", config.enabled);
+	settings.setValue("software_trigger/any", config.any);
+	QVariantList conditions;
+	for (const auto& c : config.conditions) {
+		QVariantMap row;
+		row["channel"] = c.channel;
+		row["kind"] = int(c.kind);
+		row["comparison"] = int(c.comparison);
+		row["lower_ns"] = QVariant::fromValue<qulonglong>(c.lower_ns);
+		row["upper_ns"] = QVariant::fromValue<qulonglong>(c.upper_ns);
+		conditions.push_back(row);
+	}
+	settings.setValue("software_trigger/conditions", conditions);
+}
+
+SoftwareTrigger restore_software_trigger(QSettings& settings)
+{
+	SoftwareTrigger result;
+	if (!settings.contains("software_trigger/version")) return result;
+	if (settings.value("software_trigger/version").toInt() != 1)
+		throw std::runtime_error("Unsupported software trigger settings version.");
+	result.enabled = settings.value("software_trigger/enabled").toBool();
+	result.any = settings.value("software_trigger/any", true).toBool();
+	const auto rows = settings.value("software_trigger/conditions").toList();
+	if (rows.size() > 64 || (result.enabled && rows.empty()))
+		throw std::runtime_error("Invalid software trigger condition count.");
+	for (const auto& row : rows) {
+		const auto values = row.toMap();
+		auto integer = [&](const char* name) {
+			bool ok = false;
+			const auto value = values.value(name).toString().toULongLong(&ok);
+			if (!ok) throw std::runtime_error("Invalid software trigger settings.");
+			return uint64_t(value);
+		};
+		SoftwareTriggerCondition c;
+		const auto channel = integer("channel"), kind = integer("kind"), comparison = integer("comparison");
+		if (channel >= 64 || kind > unsigned(SoftwareTriggerKind::LowPulse) ||
+			comparison > unsigned(PulseComparison::Between))
+			throw std::runtime_error("Unknown software trigger channel or condition.");
+		c.channel = channel; c.kind = SoftwareTriggerKind(kind); c.comparison = PulseComparison(comparison);
+		c.lower_ns = integer("lower_ns"); c.upper_ns = integer("upper_ns");
+		if ((c.kind == SoftwareTriggerKind::HighPulse || c.kind == SoftwareTriggerKind::LowPulse) &&
+			(!c.lower_ns || (c.comparison == PulseComparison::Between && c.upper_ns < c.lower_ns)))
+			throw std::runtime_error("Invalid saved pulse width bounds.");
+		result.conditions.push_back(c);
+	}
+	return result;
+}
 
 void save_trigger_settings(QSettings &settings,
 	const std::shared_ptr<sigrok::Session> &session,

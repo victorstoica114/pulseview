@@ -391,9 +391,14 @@ void LogicSignal::paint_caps(QPainter &p, QLineF *const lines,
 shared_ptr<pv::data::LogicSegment> LogicSignal::get_logic_segment_to_paint() const
 {
 	shared_ptr<pv::data::LogicSegment> segment;
+	// AnalogSignal also derives from LogicSignal; without conversion it has
+	// no logic data. Callers such as edge snapping must get an empty segment.
+	const auto logic = base_->logic_data();
+	if (!logic)
+		return nullptr;
 
 	const deque< shared_ptr<pv::data::LogicSegment> > &segments =
-		base_->logic_data()->logic_segments();
+		logic->logic_segments();
 
 	if (!segments.empty()) {
 		if (segment_display_mode_ == ShowLastSegmentOnly)

@@ -185,13 +185,16 @@ private:
 	pv::widgets::PopupToolButton channels_button_;
 	QAction *channels_button_action_;
 	QToolButton trigger_button_;
+	QToolButton software_trigger_button_;
 	QAction *trigger_button_action_;
+	QAction *software_trigger_action_;
 
 	pv::widgets::SweepTimingWidget sample_count_;
 	pv::widgets::SweepTimingWidget sample_rate_;
 	QSpinBox capture_count_;
 	QCheckBox stream_windows_;
 	QSpinBox window_pretrigger_;
+	QAction *window_pretrigger_action_;
 	bool updating_sample_rate_;
 	bool updating_sample_count_;
 

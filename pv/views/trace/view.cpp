@@ -694,7 +694,8 @@ void View::set_idle_compression(bool enabled)
 	for (const auto& signal : signals_) {
 		if (!signal->enabled()) continue;
 		const auto logic = std::dynamic_pointer_cast<LogicSignal>(signal);
-		if (!logic) {
+		// Analog traces inherit LogicSignal, but must keep their real time axis.
+		if (!logic || logic->base()->type() != SignalBase::LogicChannel) {
 			reject(tr("Idle compression requires digital traces only"));
 			return;
 		}
@@ -1950,7 +1951,7 @@ void View::extents_changed(bool horz, bool vert)
 {
 	if (horz && idle_compression_enabled_)
 		for (const auto& signal : signals_)
-			if (signal->enabled() && !std::dynamic_pointer_cast<LogicSignal>(signal)) {
+			if (signal->enabled() && signal->base()->type() != SignalBase::LogicChannel) {
 				reset_idle_compression(tr("Idle compression requires digital traces only"));
 				break;
 			}

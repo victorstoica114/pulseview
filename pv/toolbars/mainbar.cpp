@@ -111,8 +111,10 @@ MainBar::MainBar(Session &session, QWidget *parent, pv::views::trace::View *view
 	channels_button_action_(nullptr),
 	trigger_button_(this),
 	trigger_button_action_(nullptr),
+	software_trigger_action_(nullptr),
 	sample_count_(" samples", this),
 	sample_rate_("Hz", this),
+	window_pretrigger_action_(nullptr),
 	updating_sample_rate_(false),
 	updating_sample_count_(false),
 	sample_count_supported_(false),
@@ -292,6 +294,25 @@ MainBar::MainBar(Session &session, QWidget *parent, pv::views::trace::View *view
 	trigger_button_.setIcon(QIcon(":/icons/trigger-rising.svg"));
 	trigger_button_.setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
 	connect(&trigger_button_, &QToolButton::clicked, this, &MainBar::on_edit_trigger);
+	software_trigger_button_.setObjectName("softwareTriggerButton");
+	software_trigger_button_.setToolButtonStyle(Qt::ToolButtonTextOnly);
+	software_trigger_button_.setText(tr("Software trigger..."));
+	connect(&software_trigger_button_, &QToolButton::clicked, this, [this] {
+		const auto selected = session_.device();
+		if (session_.get_capture_state() != Session::Stopped || session_.device_needs_reconnect() ||
+			!selected || !selected->device() || session_.using_file_device()) return;
+		try {
+			dialogs::SoftwareTriggerEditor editor(selected->device(), session_.software_trigger(), this);
+			connect(&session_, &Session::device_changed, &editor, &QDialog::reject);
+			connect(&session_, &Session::capture_state_changed, &editor, [&editor](int state) {
+				if (state != Session::Stopped) editor.reject();
+			});
+			if (editor.exec() == QDialog::Accepted && session_.device() == selected)
+				session_.set_software_trigger(editor.configuration());
+		} catch (const std::exception& e) {
+			show_session_error(tr("Cannot configure software trigger"), QString::fromUtf8(e.what()));
+		}
+	});
 
 	capture_count_.setObjectName("captures_per_run");
 	capture_count_.setRange(1, 10000);
@@ -323,11 +344,14 @@ MainBar::MainBar(Session &session, QWidget *parent, pv::views::trace::View *view
 		const QSignalBlocker mode_blocker(&stream_windows_), percent_blocker(&window_pretrigger_);
 		stream_windows_.setChecked(session_.stream_windows_enabled());
 		window_pretrigger_.setValue(session_.window_pretrigger_percent());
-		window_pretrigger_.setVisible(session_.stream_windows_enabled() && !session_.using_file_device());
+		software_trigger_button_.setText(session_.software_trigger().enabled ? tr("Software trigger (on)...") : tr("Software trigger..."));
+		software_trigger_action_->setVisible(session_.stream_windows_enabled() && !session_.using_file_device());
+		window_pretrigger_action_->setVisible(session_.stream_windows_enabled() && !session_.using_file_device());
 	};
 	connect(&session_, &Session::stream_windows_changed, this, sync_windows);
-	sync_windows();
+	connect(&session_, &Session::device_changed, this, sync_windows);
 	add_toolbar_widgets();
+	sync_windows();
 
 	sample_count_.installEventFilter(this);
 	sample_rate_.installEventFilter(this);
@@ -371,13 +395,13 @@ void MainBar::set_capture_state(pv::Session::capture_state state)
 	configure_button_.setEnabled(ui_enabled);
 	channels_button_.setEnabled(ui_enabled);
 	trigger_button_.setEnabled(ui_enabled);
+	software_trigger_button_.setEnabled(ui_enabled && !session_.using_file_device());
 	sample_count_.setEnabled(ui_enabled && !continuous_sampling_enabled());
 	sample_rate_.setEnabled(ui_enabled);
 	capture_count_.setEnabled(ui_enabled && !session_.using_file_device());
 	stream_windows_.setEnabled(ui_enabled && !session_.using_file_device() &&
 		session_.device() && session_.device()->can_stream_continuously());
 	window_pretrigger_.setEnabled(ui_enabled && !session_.using_file_device());
-	window_pretrigger_.setVisible(session_.stream_windows_enabled() && !session_.using_file_device());
 }
 
 void MainBar::reset_device_selector()
@@ -1135,11 +1159,12 @@ void MainBar::add_toolbar_widgets()
 	configure_button_action_ = addWidget(&configure_button_);
 	channels_button_action_ = addWidget(&channels_button_);
 	trigger_button_action_ = addWidget(&trigger_button_);
+	software_trigger_action_ = addWidget(&software_trigger_button_);
 	addWidget(&sample_count_);
 	addWidget(&sample_rate_);
 	addWidget(&capture_count_);
 	addWidget(&stream_windows_);
-	addWidget(&window_pretrigger_);
+	window_pretrigger_action_ = addWidget(&window_pretrigger_);
 #ifdef ENABLE_DECODE
 	addSeparator();
 	addWidget(add_decoder_button_);

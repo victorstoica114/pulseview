@@ -3,6 +3,7 @@
 #define PULSEVIEW_DATA_STREAMWINDOWS_HPP
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <cstring>
 #include <functional>
@@ -13,15 +14,34 @@
 
 namespace pv { namespace data {
 
+struct WindowPulseWidth {
+	unsigned channel = 0;
+	bool high = true;
+	// Inclusive sample bounds, derived from the requested time comparison.
+	uint64_t minimum = 1, maximum = UINT64_MAX;
+};
+
 struct WindowTriggerStage {
 	uint64_t high = 0, low = 0, rising = 0, falling = 0, edge = 0;
-	bool matches(uint64_t previous, uint64_t current, bool have_previous) const {
+	bool any = false;
+	std::vector<WindowPulseWidth> pulses;
+	bool matches(uint64_t previous, uint64_t current, bool have_previous,
+		const std::array<uint64_t, 64>& widths, uint64_t completed) const {
 		const auto changed = previous ^ current;
-		return (current & high) == high && !(current & low) &&
+		bool result = any ? ((current & high) || (~current & low) || (have_previous &&
+			((changed & current & rising) || (changed & previous & falling) || (changed & edge)))) :
+			(current & high) == high && !(current & low) &&
 			(!(rising | falling | edge) || (have_previous &&
 			 ((changed & current & rising) == rising) &&
 			 ((changed & previous & falling) == falling) &&
 			 ((changed & edge) == edge)));
+		for (const auto& pulse : pulses) {
+			const auto bit = UINT64_C(1) << pulse.channel;
+			const bool matched = (completed & bit) && bool(previous & bit) == pulse.high &&
+				widths[pulse.channel] >= pulse.minimum && widths[pulse.channel] <= pulse.maximum;
+			result = any ? result || matched : result && matched;
+		}
+		return result;
 	}
 };
 
@@ -47,11 +67,19 @@ public:
 			throw std::invalid_argument("Invalid continuous capture window configuration.");
 		const uint64_t mask = unit == 8 ? UINT64_MAX : (UINT64_C(1) << (unit * 8)) - 1;
 		for (const auto& stage : stages_) {
-			const auto used = stage.high | stage.low | stage.rising | stage.falling | stage.edge;
-			if (!used || (used & ~mask) || (stage.high & stage.low) ||
-				(stage.rising & (stage.falling | stage.low)) || (stage.falling & stage.high))
+			auto used = stage.high | stage.low | stage.rising | stage.falling | stage.edge;
+			for (const auto& pulse : stage.pulses) {
+				if (pulse.channel >= unit * 8 || !pulse.minimum || pulse.minimum > pulse.maximum)
+					throw std::invalid_argument("Invalid pulse width bounds or channel.");
+				used |= UINT64_C(1) << pulse.channel;
+				pulse_mask_ |= UINT64_C(1) << pulse.channel;
+			}
+			if (!used || (used & ~mask) || (!stage.any && ((stage.high & stage.low) ||
+				(stage.rising & (stage.falling | stage.low)) || (stage.falling & stage.high))))
 				throw std::invalid_argument("Invalid digital software trigger stage.");
 		}
+		for (unsigned channel = 0; channel < unit * 8; ++channel)
+			if (pulse_mask_ & (UINT64_C(1) << channel)) pulse_channels_.push_back(channel);
 		history_.resize(size_t(pre * unit));
 	}
 	uint64_t samples_seen() const { return next_sample_; }
@@ -75,13 +103,9 @@ public:
 				continue;
 			}
 			const auto sample = load(input + position);
-			uint64_t matches = 0;
-			for (size_t stage = 0; stage < stages_.size(); ++stage)
-				if (stages_[stage].matches(previous_, sample, have_previous_))
-					matches |= UINT64_C(1) << stage;
 			// Consecutive standard trigger stages, including overlapping prefixes
 			// and stage transitions across USB packet boundaries.
-			prefix_ = ((prefix_ << 1) | 1) & matches;
+			scan(sample, next_sample_);
 			if ((prefix_ & (UINT64_C(1) << (stages_.size() - 1))) && filled_ == history_.size()) {
 				active_ = true;
 				current_ = Window();
@@ -105,6 +129,24 @@ public:
 	}
 
 private:
+	void scan(uint64_t sample, uint64_t position) {
+		const auto changed = have_previous_ ? (previous_ ^ sample) & pulse_mask_ : 0;
+		const auto completed = changed & known_pulse_start_;
+		for (const auto channel : pulse_channels_) {
+			const auto bit = UINT64_C(1) << channel;
+			if (completed & bit) widths_[channel] = position - pulse_start_[channel];
+		}
+		uint64_t matches = 0;
+		for (size_t stage = 0; stage < stages_.size(); ++stage)
+			if (stages_[stage].matches(previous_, sample, have_previous_, widths_, completed))
+				matches |= UINT64_C(1) << stage;
+		prefix_ = ((prefix_ << 1) | 1) & matches;
+		for (const auto channel : pulse_channels_)
+			if (changed & (UINT64_C(1) << channel)) pulse_start_[channel] = position;
+		known_pulse_start_ |= changed;
+		previous_ = sample;
+		have_previous_ = true;
+	}
 	uint64_t load(const uint8_t* data) const {
 		// libsigrok logic samples use least-significant byte first.
 		uint64_t value = 0;
@@ -137,14 +179,10 @@ private:
 		current_.bytes.insert(current_.bytes.end(), data, data + bytes);
 		// A sequence may start inside this recorded window and finish just
 		// outside it. Carry matching prefixes across that boundary as well.
-		if (scan && stages_.size() > 1)
+		if (scan && (stages_.size() > 1 || pulse_mask_))
 			for (size_t offset = 0; offset < bytes; offset += unit_) {
 				const auto sample = load(data + offset);
-				uint64_t matches = 0;
-				for (size_t stage = 0; stage < stages_.size(); ++stage)
-					if (stages_[stage].matches(previous_, sample, have_previous_)) matches |= UINT64_C(1) << stage;
-				prefix_ = ((prefix_ << 1) | 1) & matches;
-				previous_ = sample; have_previous_ = true;
+				this->scan(sample, next_sample_ + offset / unit_);
 			}
 		append_history(data, bytes);
 		advance(data, bytes);
@@ -157,6 +195,9 @@ private:
 		callback_(std::move(current_));
 		current_ = Window();
 	}
+	uint64_t pulse_mask_ = 0, known_pulse_start_ = 0;
+	std::vector<unsigned> pulse_channels_;
+	std::array<uint64_t, 64> pulse_start_{}, widths_{};
 	unsigned unit_, target_, completed_ = 0;
 	uint64_t depth_, pre_, next_sample_ = 0, previous_ = 0, prefix_ = 0;
 	size_t head_ = 0, filled_ = 0;

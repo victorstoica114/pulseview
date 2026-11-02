@@ -25,6 +25,7 @@
 #include <QTextStream>
 #include <zip.h>
 #include <QLineEdit>
+#include <QMainWindow>
 #include <QListWidget>
 #include <QPushButton>
 #include <QPointer>
@@ -34,6 +35,8 @@
 #include <QSpinBox>
 #include <QTableWidget>
 #include <QTemporaryDir>
+#include <QTimer>
+#include <QWidgetAction>
 #include <thread>
 #include <libsigrokcxx/libsigrokcxx.hpp>
 #include <pv/dialogs/triggereditor.hpp>
@@ -58,6 +61,8 @@
 #include <pv/views/trace/viewport.hpp>
 #include <pv/data/logic.hpp>
 #include <pv/data/logicsegment.hpp>
+#include <pv/data/analog.hpp>
+#include <pv/data/analogsegment.hpp>
 #include <pv/prop/int.hpp>
 #ifdef ENABLE_DECODE
 #include <libsigrokdecode/libsigrokdecode.h>
@@ -67,6 +72,19 @@
 #endif
 
 namespace {
+std::unique_ptr<Application>& test_application()
+{
+	static std::unique_ptr<Application> app;
+	return app;
+}
+
+// Release Qt before process-wide Qt statics are destroyed. A function-local
+// static QApplication can otherwise crash in Qt's post routines at exit.
+struct ApplicationCleanup {
+	~ApplicationCleanup() { test_application().reset(); }
+};
+BOOST_GLOBAL_FIXTURE(ApplicationCleanup);
+
 void wait_capture(pv::Session& session)
 {
 	QElapsedTimer timer; timer.start();
@@ -86,7 +104,7 @@ void application()
 	static char executable[] = "pulseview-test";
 	static char *argv[] = {executable, nullptr};
 	static QTemporaryDir settings_directory;
-	static Application app(argc, argv);
+	if (!test_application()) test_application().reset(new Application(argc, argv));
 #ifdef ENABLE_DECODE
 	struct DecoderRuntime {
 		DecoderRuntime() {
@@ -98,7 +116,10 @@ void application()
 	static DecoderRuntime decoder_runtime;
 #endif
 	static const bool initialized = [&] {
+		qRegisterMetaType<uint64_t>("uint64_t");
 		qRegisterMetaType<pv::util::Timestamp>("util::Timestamp");
+		qRegisterMetaType<SharedPtrToSegment>("SharedPtrToSegment");
+		qRegisterMetaType<std::shared_ptr<pv::data::SignalBase>>("shared_ptr<SignalBase>");
 		QCoreApplication::setOrganizationName("PulseViewTests");
 		QCoreApplication::setApplicationName("CrashRecovery");
 		QSettings::setDefaultFormat(QSettings::IniFormat);
@@ -551,11 +572,13 @@ BOOST_AUTO_TEST_CASE(idle_display_preserves_pulses_cursors_export_and_toggle)
 		if (std::strcmp(channel.pdch_->id, "rx") == 0)
 			decoded->assign_signal(channel.id, session.signalbases()[0]);
 	deadline.restart();
-	while (deadline.elapsed() < 10000 && decoded->get_decoded_sample_count(0, true) < bytes.size()) {
+	// The inclusive counter also covers the chunk still being decoded.
+	// Inspect binary callbacks only after that chunk has finished.
+	while (deadline.elapsed() < 10000 && decoded->get_decoded_sample_count(0, false) < bytes.size()) {
 		QApplication::processEvents();
 		std::this_thread::sleep_for(std::chrono::milliseconds(1));
 	}
-	BOOST_REQUIRE(decoded->get_decoded_sample_count(0, true) >= bytes.size());
+	BOOST_REQUIRE(decoded->get_decoded_sample_count(0, false) >= bytes.size());
 	BOOST_REQUIRE_EQUAL(decoded->get_binary_data_chunk_count(0, uart.get(), 0), 3);
 	for (unsigned i = 0; i < 3; ++i) {
 		const std::vector<uint8_t>* chunk; uint64_t size;
@@ -702,6 +725,37 @@ public:
 	void stop() override { ++stops; }
 };
 
+struct IdleAnalogFixture {
+	Fixture source;
+	pv::DeviceManager manager{source.context,"",false};
+	pv::Session session{manager,"analog idle regression"};
+	std::shared_ptr<pv::data::SignalBase> analog;
+	std::shared_ptr<pv::views::trace::View> view;
+	explicit IdleAnalogFixture(bool digital) {
+		session.set_device(std::make_shared<SeriesDevice>(source));
+		for(const auto& base:session.signalbases()) {
+			const bool is_analog=base->type()==pv::data::SignalBase::AnalogChannel;
+			base->set_enabled(is_analog || (digital && base->index()==0));
+			if(is_analog)analog=base;
+		}
+		BOOST_REQUIRE(analog);
+		auto data=analog->analog_data();data->set_samplerate(1000000);
+		auto segment=std::make_shared<pv::data::AnalogSegment>(*data,0,1000000);
+		data->push_segment(segment);
+		std::vector<float> samples(4096,0.5f);
+		segment->append_interleaved_samples(samples.data(),samples.size(),1);segment->set_complete();
+		auto logic=session.signalbases()[0]->logic_data();logic->set_samplerate(1000000);
+		auto digital_segment=std::make_shared<pv::data::LogicSegment>(*logic,0,4,1000000);
+		logic->push_segment(digital_segment);
+		std::vector<uint32_t> words(4096,0);words[2048]=1;
+		digital_segment->append_payload(words.data(),words.size()*sizeof(words[0]));digital_segment->set_complete();
+		view=std::make_shared<pv::views::trace::View>(session,true);session.register_view(view);
+		view->resize(900,400);view->show();QApplication::processEvents();view->zoom_fit(false);
+		view->set_idle_threshold(0.0001);
+	}
+	~IdleAnalogFixture() { session.deregister_view(view); }
+};
+
 class ContinuousWindowDevice : public SeriesDevice {
 	std::shared_ptr<sigrok::Context> context_;
 public:
@@ -745,6 +799,63 @@ void check_tag(pv::Session& session, unsigned index, uint32_t tag)
 	segments[index]->get_samples(0, data.size(), reinterpret_cast<uint8_t*>(data.data()));
 	for (const auto value : data) BOOST_CHECK_EQUAL(value, tag);
 }
+}
+
+BOOST_AUTO_TEST_CASE(idle_compression_rejects_analog_only_and_mixed_traces)
+{
+	for(bool digital:{false,true}) {
+		QString status;
+		IdleAnalogFixture f(digital);
+		QObject::connect(f.view.get(),&pv::views::trace::View::idle_compression_changed,
+			f.view.get(),[&](bool,QString text){status=text;});
+		f.view->set_idle_compression(true);
+		BOOST_CHECK(!f.view->idle_compression_enabled());
+		BOOST_CHECK(!f.view->idle_compression_pending());
+		BOOST_CHECK(f.view->idle_time_map().empty());
+		BOOST_CHECK(status.contains("digital"));
+		const auto segment=f.analog->analog_data()->analog_segments().front();
+		BOOST_CHECK_EQUAL(segment->get_sample_count(),4096);
+		BOOST_CHECK_EQUAL(segment->get_sample(2048),0.5f);
+	}
+}
+
+BOOST_AUTO_TEST_CASE(analog_edge_snapping_without_conversion_has_no_logic_segment)
+{
+	IdleAnalogFixture f(false);
+	bool checked=false;
+	for(const auto& signal:f.view->signals())if(signal->base()==f.analog) {
+		const auto inherited=std::dynamic_pointer_cast<pv::views::trace::LogicSignal>(signal);
+		BOOST_REQUIRE(inherited); // AnalogSignal inherits LogicSignal.
+		BOOST_CHECK(!inherited->get_logic_segment_to_paint());
+		checked=true;
+	}
+	BOOST_REQUIRE(checked);
+	BOOST_CHECK_EQUAL(f.view->get_nearest_level_change(QPoint(100,100)),-1);
+}
+
+BOOST_AUTO_TEST_CASE(enabling_analog_cancels_pending_and_completed_idle_compression)
+{
+	IdleAnalogFixture f(true);
+	for(bool finish_scan:{false,true}) {
+		f.analog->set_enabled(false);
+		QApplication::processEvents();
+		const double scale=f.view->scale();const auto offset=f.view->offset();
+		f.view->set_idle_compression(true);
+		BOOST_REQUIRE(f.view->idle_compression_pending());
+		if(finish_scan) {
+			QElapsedTimer timer;timer.start();
+			while(f.view->idle_compression_pending() && timer.elapsed()<5000)QApplication::processEvents();
+			BOOST_REQUIRE(!f.view->idle_compression_pending());
+			BOOST_REQUIRE(!f.view->idle_time_map().empty());
+		}
+		f.analog->set_enabled(true);
+		QApplication::processEvents();
+		BOOST_CHECK(!f.view->idle_compression_enabled());
+		BOOST_CHECK(!f.view->idle_compression_pending());
+		BOOST_CHECK(f.view->idle_time_map().empty());
+		BOOST_CHECK_EQUAL(f.view->scale(),scale);
+		BOOST_CHECK_EQUAL(f.view->offset(),offset);
+	}
 }
 
 BOOST_AUTO_TEST_CASE(repeated_captures_preserve_all_segments_and_setup)
@@ -1052,6 +1163,198 @@ BOOST_AUTO_TEST_CASE(continuous_window_partial_stop_disconnect_and_settings_fail
 		}else BOOST_CHECK(session.capture_error().contains("settings"));
 		if(scenario==1)BOOST_CHECK(session.capture_error().contains("source disconnected"));
 	}
+}
+
+BOOST_AUTO_TEST_CASE(software_trigger_editor_settings_and_live_window_capture)
+{
+	Fixture f; pv::DeviceManager manager(f.context,"",false);
+	pv::Session session(manager,"software pulse windows");
+	auto source=std::make_shared<ContinuousWindowDevice>(f);
+	session.set_device(source);
+	pv::SoftwareTrigger initial; initial.enabled=true; initial.any=true;
+	initial.conditions.push_back({22,pv::SoftwareTriggerKind::LowPulse,pv::PulseComparison::Between,1000,1000});
+	initial.conditions.push_back({31,pv::SoftwareTriggerKind::Rising});
+	pv::dialogs::SoftwareTriggerEditor editor(f.device,initial);
+	auto* table=widget<QTableWidget>(editor,"softwareTriggerConditions");
+	BOOST_REQUIRE_EQUAL(table->rowCount(),2);
+	BOOST_CHECK_EQUAL(widget<QComboBox>(editor,"softwareTriggerCombine")->currentIndex(),1);
+	BOOST_REQUIRE(widget<QDialogButtonBox>(editor,"softwareTriggerButtons")->button(QDialogButtonBox::Ok)->isEnabled());
+	const auto configured=editor.configuration();
+	const auto screenshot=qEnvironmentVariable("PV_SOFTWARE_TRIGGER_SCREENSHOT");
+	if (!screenshot.isEmpty()) {
+		editor.show();QApplication::processEvents();
+		BOOST_REQUIRE(editor.grab().save(screenshot));
+		editor.hide();
+	}
+	QTemporaryDir directory;
+	QSettings settings(directory.filePath("software.ini"),QSettings::IniFormat);
+	pv::save_software_trigger(settings,configured);
+	settings.sync();
+	const auto restored=pv::restore_software_trigger(settings);
+	BOOST_REQUIRE_EQUAL(restored.conditions.size(),2);
+	BOOST_CHECK(restored.enabled && restored.any);
+	BOOST_CHECK_EQUAL(restored.conditions[0].lower_ns,1000);
+	BOOST_CHECK_EQUAL(int(restored.conditions[0].kind),int(pv::SoftwareTriggerKind::LowPulse));
+	BOOST_REQUIRE(session.set_software_trigger(restored));
+	BOOST_REQUIRE(session.set_stream_windows_enabled(true));
+	BOOST_REQUIRE(session.set_captures_per_run(3));
+	QString error;
+	session.start_capture([&](QString message){error=message;});wait_capture(session);
+	BOOST_REQUIRE_MESSAGE(error.isEmpty(),error.toStdString());
+	BOOST_CHECK_EQUAL(source->starts.load(),1);
+	BOOST_CHECK(source->untriggered && source->unlimited);
+	BOOST_REQUIRE_EQUAL(session.captured_segment_count(),3);
+	BOOST_CHECK_EQUAL(session.capture_outcome().toStdString(),"complete");
+	// D22's one-sample LOW pulses end at 101, 401 and 701; D31 never rises.
+	for(unsigned index=0;index<3;++index) {
+		uint64_t origin=0;BOOST_REQUIRE(session.segment_sample_origin(index,origin));
+		BOOST_CHECK_EQUAL(origin,85+300*index);
+	}
+	QSettings setup(directory.filePath("session.ini"),QSettings::IniFormat);
+	session.save_setup(setup);
+	BOOST_CHECK(pv::restore_software_trigger(setup).enabled);
+	settings.setValue("software_trigger/conditions",QVariantList{QVariantMap{{"channel",64}}});
+	BOOST_CHECK_THROW(pv::restore_software_trigger(settings),std::runtime_error);
+	// Disabled channels remain visible and cannot be accepted as active conditions.
+	f.device->channels().at(22)->set_enabled(false);
+	pv::dialogs::SoftwareTriggerEditor invalid(f.device,initial);
+	BOOST_CHECK(!widget<QDialogButtonBox>(invalid,"softwareTriggerButtons")->button(QDialogButtonBox::Ok)->isEnabled());
+}
+
+BOOST_AUTO_TEST_CASE(stream_window_toolbar_controls_follow_mode_after_layout)
+{
+	Fixture f; pv::DeviceManager manager(f.context,"",false);
+	pv::Session session(manager,"window toolbar visibility");
+	auto source=std::make_shared<ContinuousWindowDevice>(f);
+	session.set_device(source);
+	auto view=std::make_shared<pv::views::trace::View>(session,true);
+	session.register_view(view);
+	QTemporaryDir directory;
+	const auto path=directory.filePath("replay.bin");
+	{
+		QFile raw(path); BOOST_REQUIRE(raw.open(QIODevice::WriteOnly));
+		BOOST_REQUIRE_EQUAL(raw.write(QByteArray(64,char(1))),64);
+	}
+	for(bool initial:{false,true}) {
+		BOOST_REQUIRE(session.set_stream_windows_enabled(initial));
+		QMainWindow window;
+		pv::toolbars::MainBar bar(session,&window,view.get());
+		window.addToolBar(&bar);
+		window.resize(2600,160); window.show();
+		auto* check=widget<QCheckBox>(bar,"stream_windows_enabled");
+		const auto action_for=[&](QWidget* control) -> QAction* {
+			for(auto* action:bar.actions()) {
+				auto* wa=qobject_cast<QWidgetAction*>(action);
+				if(wa && wa->defaultWidget()==control) return action;
+			}
+			return nullptr;
+		};
+		for(bool enabled:{initial,!initial,initial,!initial}) {
+			check->setChecked(enabled); QApplication::processEvents();
+			BOOST_CHECK_EQUAL(session.stream_windows_enabled(),enabled);
+			for(const auto& name:{"softwareTriggerButton","window_pretrigger_percent"}) {
+				auto* control=widget<QWidget>(bar,name);
+				auto* action=action_for(control); BOOST_REQUIRE(action);
+				// Visibility must reach the toolbar layout, not only its child widget.
+				BOOST_CHECK_EQUAL(action->isVisible(),enabled);
+				BOOST_CHECK_EQUAL(control->isVisible(),enabled);
+			}
+		}
+		BOOST_REQUIRE(session.set_stream_windows_enabled(true));
+		session.set_device(std::make_shared<pv::devices::InputFile>(f.context,path.toStdString(),
+			f.context->input_formats().at("binary"),std::map<std::string,Glib::VariantBase>{
+				{"numchannels",Glib::Variant<gint32>::create(8)},
+				{"samplerate",Glib::Variant<guint64>::create(1000000)}}));
+		QApplication::processEvents();
+		BOOST_CHECK(session.stream_windows_enabled()); // Retain the preference for the next device.
+		for(const auto& name:{"softwareTriggerButton","window_pretrigger_percent"}) {
+			auto* control=widget<QWidget>(bar,name);
+			auto* action=action_for(control); BOOST_REQUIRE(action);
+			BOOST_CHECK(!action->isVisible());
+			BOOST_CHECK(!control->isVisible());
+		}
+		session.set_device(source); QApplication::processEvents();
+		for(const auto& name:{"softwareTriggerButton","window_pretrigger_percent"}) {
+			auto* control=widget<QWidget>(bar,name);
+			auto* action=action_for(control); BOOST_REQUIRE(action);
+			BOOST_CHECK(action->isVisible());
+			BOOST_CHECK(control->isVisible());
+		}
+		window.removeToolBar(&bar); bar.setParent(nullptr);
+	}
+	session.deregister_view(view);
+}
+
+BOOST_AUTO_TEST_CASE(software_trigger_hardware_opt_in)
+{
+	const auto directory=qEnvironmentVariable("PV_SOFTWARE_TRIGGER_HARDWARE");
+	if(directory.isEmpty())return;
+	application();
+	auto context=sigrok::Context::create();
+	pv::DeviceManager manager(context,"",false);
+	const auto found=context->drivers().at("fnirsi-dla32")->scan();
+	BOOST_REQUIRE_EQUAL(found.size(),1);
+	pv::Session session(manager,"DLA32 software pulse width qualification");
+	session.set_device(std::make_shared<pv::devices::HardwareDevice>(context,found[0]));
+	const auto device=session.device()->device();
+	for(const auto& channel:device->channels())channel->set_enabled(true);
+	device->config_set(sigrok::ConfigKey::DATA_SOURCE,Glib::Variant<Glib::ustring>::create("Stream"));
+	device->config_set(sigrok::ConfigKey::SAMPLERATE,Glib::Variant<guint64>::create(5000000));
+	device->config_set(sigrok::ConfigKey::LIMIT_SAMPLES,Glib::Variant<guint64>::create(32));
+	device->config_set(sigrok::ConfigKey::VOLTAGE_THRESHOLD,Glib::VariantBase(g_variant_new("(dd)",1.6,1.6)));
+	BOOST_REQUIRE(session.set_stream_windows_enabled(true));
+	BOOST_REQUIRE(session.set_window_pretrigger_percent(50));
+	BOOST_REQUIRE(session.set_captures_per_run(3));
+	QJsonArray reports;
+	for(bool high:{true,false})
+	for(auto comparison:{pv::PulseComparison::Less,pv::PulseComparison::Greater,pv::PulseComparison::Between}) {
+		const QString name=QString(high?"high-":"low-")+QString::number(int(comparison));
+		pv::SoftwareTrigger config;config.enabled=true;config.any=true;
+		const uint64_t threshold=comparison==pv::PulseComparison::Less?600:400;
+		const pv::SoftwareTriggerCondition desired{0,high?pv::SoftwareTriggerKind::HighPulse:pv::SoftwareTriggerKind::LowPulse,comparison,threshold,600};
+		const pv::SoftwareTriggerCondition impossible{0,pv::SoftwareTriggerKind::HighPulse,pv::PulseComparison::Greater,100000,100000};
+		config.conditions=high?std::vector<pv::SoftwareTriggerCondition>{desired,impossible}:
+			std::vector<pv::SoftwareTriggerCondition>{impossible,desired};
+		BOOST_REQUIRE(session.set_software_trigger(config));
+		QString error;session.start_capture([&](QString message){error=message;});wait_capture(session);
+		BOOST_REQUIRE_MESSAGE(error.isEmpty(),error.toStdString());
+		BOOST_REQUIRE_EQUAL(session.capture_outcome().toStdString(),"complete");
+		BOOST_REQUIRE_EQUAL(session.captured_segment_count(),3);
+		QJsonArray windows;
+		for(unsigned index=0;index<3;++index) {
+			const auto segment=session.signalbases()[0]->logic_data()->logic_segments().at(index);
+			BOOST_REQUIRE_EQUAL(segment->get_sample_count(),32);
+			std::array<uint32_t,32> samples;
+			segment->get_samples(0,32,reinterpret_cast<uint8_t*>(samples.data()));
+			BOOST_REQUIRE(bool(samples[15]&1)==high);
+			BOOST_REQUIRE(bool(samples[16]&1)!=high);
+			unsigned width=0;
+			for(int sample=15;sample>=0&&bool(samples[sample]&1)==high;--sample)++width;
+			BOOST_REQUIRE(width==2||width==3);
+			if(comparison==pv::PulseComparison::Less)BOOST_CHECK_EQUAL(width,2);
+			if(comparison==pv::PulseComparison::Greater)BOOST_CHECK_EQUAL(width,3);
+			uint64_t origin=0;BOOST_REQUIRE(session.segment_sample_origin(index,origin));
+			QFile raw(QDir(directory).filePath(name+QString("-%1.logic.bin").arg(index)));
+			BOOST_REQUIRE(raw.open(QIODevice::WriteOnly|QIODevice::NewOnly));
+			BOOST_REQUIRE_EQUAL(raw.write(reinterpret_cast<const char*>(samples.data()),sizeof(samples)),sizeof(samples));
+			windows.append(QJsonObject{{"origin",QString::number(qulonglong(origin))},{"width_samples",int(width)},
+				{"trigger_offset",16},{"complete",true}});
+		}
+		reports.append(QJsonObject{{"case",name},{"windows",windows},{"combination","OR"},
+			{"other_condition","HIGH width > 100000 ns (negative control)"}});
+	}
+	// The same impossible alternative under AND must produce no windows.
+	auto negative=session.software_trigger();negative.any=false;
+	BOOST_REQUIRE(session.set_software_trigger(negative));
+	QTimer::singleShot(250,&session,[&]{session.request_stop_capture();});
+	QString error;session.start_capture([&](QString message){error=message;});wait_capture(session);
+	BOOST_REQUIRE_MESSAGE(error.isEmpty(),error.toStdString());
+	BOOST_CHECK_EQUAL(session.captured_segment_count(),0);
+	BOOST_CHECK_EQUAL(session.capture_outcome().toStdString(),"stopped");
+	QFile report(QDir(directory).filePath("software-trigger-proof.json"));
+	BOOST_REQUIRE(report.open(QIODevice::WriteOnly|QIODevice::NewOnly));
+	report.write(QJsonDocument(QJsonObject{{"rate",5000000},{"cases",reports},
+		{"and_negative_windows",int(session.captured_segment_count())},{"firmware_changed",false}}).toJson());
 }
 
 BOOST_AUTO_TEST_CASE(continuous_window_saved_example_native_opt_in)

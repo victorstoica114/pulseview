@@ -41,6 +41,7 @@
 #include <QObject>
 #include <QSettings>
 #include <pv/data/streamwindows.hpp>
+#include <pv/softwaretrigger.hpp>
 #include <QString>
 #include <QElapsedTimer>
 
@@ -202,6 +203,8 @@ public:
 	bool set_captures_per_run(unsigned count);
 	bool stream_windows_enabled() const { return stream_windows_enabled_.load(); }
 	bool set_stream_windows_enabled(bool enabled);
+	const SoftwareTrigger& software_trigger() const { return software_trigger_; }
+	bool set_software_trigger(const SoftwareTrigger& config);
 	unsigned window_pretrigger_percent() const { return window_pretrigger_percent_.load(); }
 	bool set_window_pretrigger_percent(unsigned percent);
 	bool segment_sample_origin(uint32_t segment, uint64_t& origin) const;
@@ -327,6 +330,7 @@ private:
 	bool stop_requested_; //!< Protected by sampling_mutex_
 	std::atomic_uint captures_per_run_{1};
 	std::atomic_bool stream_windows_enabled_{false};
+	SoftwareTrigger software_trigger_;
 	std::atomic_uint window_pretrigger_percent_{50};
 	bool active_window_mode_ = false;
 	uint64_t window_depth_ = 0, window_pre_ = 0, window_rate_ = 0;

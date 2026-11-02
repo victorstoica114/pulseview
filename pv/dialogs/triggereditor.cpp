@@ -453,6 +453,143 @@ void TriggerEditor::update_validation()
 	buttons_->button(QDialogButtonBox::Ok)->setEnabled(valid);
 }
 
+SoftwareTriggerEditor::SoftwareTriggerEditor(const std::shared_ptr<sigrok::Device>& device,
+	const SoftwareTrigger& initial, QWidget* parent) : QDialog(parent),
+	enabled_(new QCheckBox(tr("Use software conditions"), this)),
+	combine_(new QComboBox(this)), table_(new QTableWidget(this)),
+	error_(new QLabel(this)),
+	buttons_(new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this))
+{
+	if (!device) throw std::runtime_error("Select a digital capture device first.");
+	setWindowTitle(tr("Software trigger — Stream windows"));
+	setObjectName("softwareTriggerEditor");
+	resize(850, 380);
+	rate_ = g_variant_get_uint64(device->config_get(sigrok::ConfigKey::SAMPLERATE).gobj());
+	for (const auto& channel : device->channels())
+		if (channel->type() == sigrok::ChannelType::LOGIC && channel->index() < 64) {
+			channels_.emplace_back(channel->index(), QString::fromStdString(channel->name()) +
+				(channel->enabled() ? QString() : tr(" (disabled)")));
+			if (channel->enabled()) enabled_channels_ |= UINT64_C(1) << channel->index();
+		}
+	enabled_->setObjectName("softwareTriggerEnabled");
+	combine_->setObjectName("softwareTriggerCombine");
+	combine_->addItems({tr("All conditions (AND)"), tr("Any condition (OR)")});
+	combine_->setCurrentIndex(initial.any ? 1 : 0);
+	enabled_->setChecked(initial.enabled);
+	table_->setObjectName("softwareTriggerConditions");
+	table_->setColumnCount(5);
+	table_->setHorizontalHeaderLabels({tr("Channel"), tr("Condition"), tr("Comparison"), tr("Width (ns)"), tr("Upper width (ns)")});
+	table_->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+	table_->setSelectionBehavior(QAbstractItemView::SelectRows);
+	table_->setSelectionMode(QAbstractItemView::SingleSelection);
+	auto* layout = new QVBoxLayout(this);
+	layout->addWidget(enabled_);
+	layout->addWidget(combine_);
+	auto* help = new QLabel(tr("Used with Stream windows and a continuous digital source. "
+		"Pulse width is measured between sampled edges; the trigger marks the closing edge. "
+		"The first partial pulse is ignored. < and > are strict; Between includes both bounds. "
+		"When disabled, Stream windows use the standard trigger sequence."), this);
+	help->setWordWrap(true); layout->addWidget(help);
+	layout->addWidget(table_);
+	auto* row = new QHBoxLayout;
+	auto* add = new QPushButton(tr("Add condition"), this);
+	auto* remove = new QPushButton(tr("Remove selected"), this);
+	add->setObjectName("addSoftwareTriggerCondition");
+	remove->setObjectName("removeSoftwareTriggerCondition");
+	row->addWidget(add); row->addWidget(remove); row->addStretch(); layout->addLayout(row);
+	error_->setObjectName("softwareTriggerError");
+	error_->setWordWrap(true); layout->addWidget(error_);
+	buttons_->setObjectName("softwareTriggerButtons"); layout->addWidget(buttons_);
+	connect(add, &QPushButton::clicked, this, [this] {
+		if (table_->rowCount() >= 64) return;
+		SoftwareTriggerCondition c;
+		if (!channels_.empty()) c.channel = channels_.front().first;
+		add_row(c); validate();
+	});
+	connect(remove, &QPushButton::clicked, this, [this] {
+		if (table_->currentRow() >= 0) table_->removeRow(table_->currentRow());
+		validate();
+	});
+	connect(enabled_, &QCheckBox::toggled, this, [this] { validate(); });
+	connect(combine_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this] { validate(); });
+	connect(buttons_, &QDialogButtonBox::rejected, this, &QDialog::reject);
+	connect(buttons_, &QDialogButtonBox::accepted, this, [this] {
+		try {
+			const auto c = configuration();
+			if (c.enabled) compile_software_trigger(c, rate_, enabled_channels_);
+			QDialog::accept();
+		} catch (const std::exception& e) { error_->setText(QString::fromUtf8(e.what())); }
+	});
+	for (const auto& c : initial.conditions) add_row(c);
+	if (initial.conditions.empty()) {
+		SoftwareTriggerCondition c;
+		if (!channels_.empty()) c.channel = channels_.front().first;
+		add_row(c);
+	}
+	validate();
+}
+
+void SoftwareTriggerEditor::add_row(const SoftwareTriggerCondition& c)
+{
+	const int row = table_->rowCount(); table_->insertRow(row);
+	auto* channel = new QComboBox(table_);
+	for (const auto& ch : channels_) channel->addItem(ch.second, ch.first);
+	if (channel->findData(c.channel) < 0) channel->addItem(tr("D%1 (unavailable)").arg(c.channel), c.channel);
+	channel->setCurrentIndex(channel->findData(c.channel));
+	auto* kind = new QComboBox(table_);
+	kind->addItems({tr("Low"), tr("High"), tr("Rising edge"), tr("Falling edge"), tr("Either edge"),
+		tr("HIGH pulse"), tr("LOW pulse")});
+	kind->setCurrentIndex(int(c.kind));
+	auto* comparison = new QComboBox(table_);
+	comparison->addItems({tr("<"), tr(">"), tr("Between")});
+	comparison->setCurrentIndex(int(c.comparison));
+	auto* lower = new QLineEdit(QString::number(qulonglong(c.lower_ns)), table_);
+	auto* upper = new QLineEdit(QString::number(qulonglong(c.upper_ns)), table_);
+	table_->setCellWidget(row, 0, channel); table_->setCellWidget(row, 1, kind);
+	table_->setCellWidget(row, 2, comparison); table_->setCellWidget(row, 3, lower);
+	table_->setCellWidget(row, 4, upper);
+	for (auto* box : {channel, kind, comparison})
+		connect(box, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this] { validate(); });
+	for (auto* edit : {lower, upper})
+		connect(edit, &QLineEdit::textChanged, this, [this] { validate(); });
+}
+
+SoftwareTrigger SoftwareTriggerEditor::configuration() const
+{
+	SoftwareTrigger result;
+	result.enabled = enabled_->isChecked(); result.any = combine_->currentIndex() == 1;
+	for (int row = 0; row < table_->rowCount(); ++row) {
+		SoftwareTriggerCondition c;
+		c.channel = qobject_cast<QComboBox*>(table_->cellWidget(row, 0))->currentData().toUInt();
+		c.kind = SoftwareTriggerKind(qobject_cast<QComboBox*>(table_->cellWidget(row, 1))->currentIndex());
+		c.comparison = PulseComparison(qobject_cast<QComboBox*>(table_->cellWidget(row, 2))->currentIndex());
+		bool lower_ok, upper_ok;
+		c.lower_ns = qobject_cast<QLineEdit*>(table_->cellWidget(row, 3))->text().toULongLong(&lower_ok);
+		c.upper_ns = qobject_cast<QLineEdit*>(table_->cellWidget(row, 4))->text().toULongLong(&upper_ok);
+		if (!lower_ok || !upper_ok) throw std::runtime_error("Enter pulse widths as whole nanoseconds.");
+		result.conditions.push_back(c);
+	}
+	return result;
+}
+
+void SoftwareTriggerEditor::validate()
+{
+	for (int row = 0; row < table_->rowCount(); ++row) {
+		const bool pulse = qobject_cast<QComboBox*>(table_->cellWidget(row, 1))->currentIndex() >= 5;
+		table_->cellWidget(row, 2)->setEnabled(pulse);
+		table_->cellWidget(row, 3)->setEnabled(pulse);
+		table_->cellWidget(row, 4)->setEnabled(pulse &&
+			qobject_cast<QComboBox*>(table_->cellWidget(row, 2))->currentIndex() == 2);
+	}
+	try {
+		const auto c = configuration();
+		if (c.enabled) compile_software_trigger(c, rate_, enabled_channels_);
+		error_->clear(); buttons_->button(QDialogButtonBox::Ok)->setEnabled(true);
+	} catch (const std::exception& e) {
+		error_->setText(QString::fromUtf8(e.what())); buttons_->button(QDialogButtonBox::Ok)->setEnabled(false);
+	}
+}
+
 void TriggerEditor::accept()
 {
 	try { trigger(); hardware_options(); QDialog::accept(); }

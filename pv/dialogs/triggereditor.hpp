@@ -7,6 +7,7 @@
 #include <QDialog>
 #include <QString>
 #include <pv/triggersequence.hpp>
+#include <pv/softwaretrigger.hpp>
 
 class QCheckBox;
 class QComboBox;
@@ -20,6 +21,24 @@ class QTableWidget;
 
 namespace pv {
 namespace dialogs {
+
+class SoftwareTriggerEditor : public QDialog
+{
+public:
+	SoftwareTriggerEditor(const std::shared_ptr<sigrok::Device>& device,
+		const SoftwareTrigger& initial, QWidget* parent = nullptr);
+	SoftwareTrigger configuration() const;
+private:
+	void add_row(const SoftwareTriggerCondition& condition);
+	void validate();
+	uint64_t rate_ = 0, enabled_channels_ = 0;
+	std::vector<std::pair<unsigned, QString>> channels_;
+	QCheckBox* enabled_;
+	QComboBox* combine_;
+	QTableWidget* table_;
+	QLabel* error_;
+	QDialogButtonBox* buttons_;
+};
 
 class TriggerEditor : public QDialog
 {
