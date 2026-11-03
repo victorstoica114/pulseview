@@ -244,14 +244,26 @@ bound, not a measurement of device buffer capacity. The planned finite-return
 phase did not run.
 The failed accepted RAW remains 0 B and all earlier/partial files are retained.
 
-The drain includes three CRC-checked source messages whose serial commands were
-sent approximately 102/203/304 ms after the host Stop completion. Both UART readers
-agree. Monotonic/realtime anchors before and after the run differ by about 21 us;
-the comparison does not assume a kernel timestamp epoch. These witnesses rule
-out interpreting all returned drain bytes as an old pre-Stop static backlog.
+The drain includes three CRC-checked source messages. Their recorded host times,
+approximately 102/203/304 ms after host Stop completion, mark completion of serial
+write+flush, not exact electrical emission. Both UART readers agree. The preceding
+command had already completed after Stop in each case, so the next write could
+only start later: causal lower bounds are approximately 0.320/101.544/202.724 ms.
+This freshness argument needs no assumed maximum serial write/flush latency.
+Monotonic/realtime anchors before and after the run differ by about 21 us; this
+does not bound every intervening clock error or assume a kernel timestamp epoch.
+These witnesses rule out interpreting all returned drain bytes as an old
+pre-Stop static backlog under the recorded clock mapping.
 A successful OUT is still not a firmware execution acknowledgment, and the
 observation does not locate the fault in firmware, FPGA, USB bridge, guest HCD
 or the outer VMware transport.
+
+Offline review of the full retained drain finds 335554 complete D0 periods,
+all 49–51 samples. At the nominal 50 MS/s, the first-byte sample intervals between
+the three messages differ from the corresponding host completion intervals by
+about 1.683 and 7.358 us. These are bounded D0/D22 witnesses, not arbitrary
+continuity or an exact sample-zero time. Cancellation, Stop and replacement
+synchronous reads occurred together; the run cannot isolate their effects.
 
 All 370 monitor events form 185 closed URB pairs, with zero reported drops,
 queued events, truncation or write failure. All eight 2048-byte commands match
