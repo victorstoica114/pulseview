@@ -1,5 +1,10 @@
 # Linux validation, 2 November 2026
 
+Windows testing resumed on November 3. See the
+[Windows validation and USB handover report](windows-validation-20261103.md)
+for the completed checks and the additional failed 50 MS/s continuity test.
+The owner-deferred Windows statements below describe the earlier test state.
+
 This fork update adds OR and sampled HIGH/LOW pulse-width conditions to
 Stream windows. Width comparisons use whole nanoseconds; `<` and `>` are
 strict and Between includes both bounds. A pulse triggers at its closing
