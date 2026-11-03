@@ -361,6 +361,74 @@ Win32 boundary, without a speculative product change.
 API contracts: [DeviceIoControl](https://learn.microsoft.com/en-us/windows/win32/api/ioapiset/nf-ioapiset-deviceiocontrol),
 [module lifetime](https://learn.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-getmodulehandleexw).
 
+## Follow-up: host request phases
+
+A further fixed cohort at 16:08–16:09 UTC adds native QEMU 11.1.2 USB/xHCI
+events to the same private SDK/API observer. Linux is in VMware; Windows is
+the nested QEMU/KVM guest. The unchanged VM utility starts QEMU with only
+the temporary addition of `-msg timestamp=on`, retaining the qualified reset
+guard. Selected events go to private tmpfs during acquisition and are retired
+before copying the log. No product, SDK file, firmware, wire, buffer, timeout
+or priority is changed.
+
+Before physical use, 21 virtual control/interrupt completions establish the
+native timestamp format and packet/transfer relation. Synthetic request-lifetime
+and conservation checks pass, including address reuse, plus 11 rejection cases.
+QEMU UTC and kernel usbmon realtime timestamps are checked directly for causal
+order; host clock-offset bounds are sampled at 100 Hz. These checks do not
+guarantee every possible clock adjustment between samples. No absolute Windows
+QPC-to-host subtraction or earlier ETW Waiting/Ready attribution is used.
+
+One Windows 5 MS/s/100 MB control, one 50 MS/s/400 MB diagnostic and the subsequent
+Linux 5 MS/s/100 MB return all pass independent RAW conversion, D0, consecutive
+CRC messages and cleanup. The same source connection stays open through this
+cohort, without retry. The 50 MS/s case has 20 consecutive messages
+`802501`–`802520`. Earlier failed captures remain failures; this positive case
+does not establish a fix or arbitrary all-channel continuity.
+
+All 383 positive kernel sample-IN completions and four full 2048-byte command
+transactions match their QEMU request lifetimes and xHCI completions. Kernel
+payload is exactly retained RAW 400556032 B followed by the separate 1 MiB
+unconsumed tail. The 382 RAW-bearing requests are serialized, with these
+host-clock intervals:
+
+| Observed interval | Total |
+| --- | ---: |
+| xHCI transfer start → backend data-request marker | 6.917 ms |
+| Backend marker → kernel submission | 38.974 ms |
+| Kernel submission → kernel completion | 2327.368 ms |
+| Kernel completion → QEMU callback/copy marker | 142.187 ms |
+| Callback/copy marker → xHCI success marker | 7.362 ms |
+| Between one xHCI success and the next transfer start | 432.774 ms |
+| First xHCI start → last RAW-bearing xHCI success | 2955.582 ms |
+
+The first six rows conserve the complete window exactly; the longest interval
+between requests is 5.169 ms. The separate Windows clock records 2915.16430 ms
+across 382 RAW-bearing ReadEndP calls, including 2828.02838 ms inside
+DeviceIoControl. Their endpoints differ from the host window; these totals are
+not subtracted across clocks. The unconsumed read stays outside both RAW totals.
+
+Kernel-pending time is not measured wire utilization. The post-kernel bracket
+includes libusb callback dispatch, QEMU copying/logging and scheduling. The xHCI
+success marker follows unmapping but precedes guest event reporting; it does
+not prove that Windows handled an interrupt. Inter-request gaps can include
+guest/driver work, host emulation and scheduling. Instrumentation costs and a
+failure rate are not estimated. The native log backend has no global dropped-event
+counter: completeness is checked for the matched kernel requests/commands,
+without claiming globally zero log loss.
+
+After protected detach and normal Windows shutdown, the Linux return and DL32
+query pass; DLA and source are released. All 1248 product files, HEADs, existing
+differences and installed Linux binaries remain unchanged. This further bounds
+the measured host path but does not isolate a DLA/bridge/VMware cause, prove
+physical buffer capacity or justify an allocator/priority change. AUD-006 stays
+open. Only this evidence is published; raw traces and instrumentation stay private.
+
+Trace definitions: [QEMU 11.1.2 USB events](https://github.com/qemu/qemu/blob/v11.1.2/hw/usb/trace-events),
+[host backend](https://github.com/qemu/qemu/blob/v11.1.2/hw/usb/host-libusb.c),
+[xHCI markers](https://github.com/qemu/qemu/blob/v11.1.2/hw/usb/hcd-xhci.c),
+[usbmon timestamp source](https://github.com/gregkh/linux/blob/v7.2.9/drivers/usb/mon/mon_bin.c).
+
 ## Remaining limits
 
 A separate cold Linux 5 MS/s capture after hub recovery also returned 100 MB
