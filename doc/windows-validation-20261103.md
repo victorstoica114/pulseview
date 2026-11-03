@@ -549,3 +549,86 @@ it is explicit laboratory recovery, never an automatic response to a timeout.
 After later cycles, source-only USB reauthorization restored the v8 UART;
 electrical capture witnesses were checked separately. Private captures,
 commercial DLLs, VM disks and authentication material are not published.
+
+
+## Standalone WCH buffered-read diagnostic, 19:09–19:15 UTC
+
+A fixed cohort compared direct and driver-buffered SDK reads with the existing
+D0 1 MHz clock and numbered CRC/UART witness on D22. Windows 11 ran in nested
+QEMU/KVM inside Linux/VMware; DLA `1a86:5537` remained on the same Linux USB path
+at negotiated 5000 Mb/s. The source reported its existing v8 configuration.
+The known vendor APP provenance is retained, without a new flash readback.
+
+This is a **standalone synchronous SDK diagnostic**, with the unchanged product
+C protocol encoder/decoder. It does not qualify libsigrok datafeed, worker or GUI
+integration. The tested helper SHA256 is
+`ad19d4dae2450aeb624bf2d154e097550e2d47283b08e27d98867ffe85ccddfc`;
+SDK `db19ce17...` and installed SYS `afa9f449...`/3.4.2023.10 were pinned.
+The 1 MiB read/driver-packet size, timeout policy and four 2048-byte commands
+were held fixed. The commands match the earlier qualified product captures
+byte for byte. Both paths include synchronous RAW/LOGIC recording and logging.
+
+Both initial 5 MS/s, 100 MB controls passed RAW conversion, D0, 50 consecutive
+CRC packets, Stop/quiet and kernel-byte accounting. They gated the following
+four 50 MS/s, 400 MB trials, in this order:
+
+| SDK policy | Measured application pause, ms | D0 anomalies | D22 result | ARM-to-last-RAW kernel window, ms | No-IN-pending total, ms | Longest no-IN-pending gap, ms |
+|---|---:|---:|---|---:|---:|---:|
+| Direct | none | 5 | 20 CRC packets, gaps/replay | 3672.261 | 1342.747 | 48.041 |
+| Buffered | none | 0 | 20 consecutive CRC packets | 2777.852 | 429.521 | 10.705 |
+| Direct | 706.219 | 4 | 19 CRC packets, gaps/replay | 4957.960 | 2634.308 | 711.156 |
+| Buffered | 715.594 | 0 | 20 consecutive CRC packets | 2508.234 | 191.936 | 2.363 |
+
+Every 50 MS/s trial returned 400,000,000 LOGIC bytes from 400,556,032 retained
+RAW bytes. All four have accepted Stop/cleanup, exact independent all32
+RAW-to-LOGIC conversion and an exact kernel stream prefix in original order.
+All positive sample-IN payloads, including unused/canceled tails and direct
+drains, are separately conserved. The maximum sample-IN depth observed in the
+Linux kernel was one for both SDK policies; this does not measure Windows'
+internal IRP count. Pending time is an interval union, not physical bus use.
+
+In the paused buffered trial, the completed-queue snapshot grew from one entry /
+1 MiB to 111 entries / 111 MiB (116,391,936 B), with no application read between
+the two queries. The measured pause was 715.594 ms; the direct trial's pause was
+706.219 ms. Both requested 700 ms after the first retained 1 MiB. Queue snapshots
+count completed host entries/bytes, not lost bytes, total capacity or data still
+in hardware. QPC and kernel realtime were not absolutely clock-aligned.
+
+The direct trials remain **data failures** despite correct count and cleanup.
+The unpaused failure has a 60,929,088 B exact suffix repeated at distance 128 MiB,
+including three complete repeated CRC markers. The paused failure has the full
+131,564,544 B compared region repeated at that distance, including six repeated
+markers, 33,554,432 delivered samples apart. Independent RAW D0 extraction
+confirms the reported anomalies. Thus the discontinuity exists before SDK copy
+and C conversion. The unpaused direct failure also means the explicit pause
+cannot explain every direct failure in this cohort.
+
+Both buffered trials passed the bounded D0/D22 criteria in this ordered cohort.
+This supports further private integration work; it is not a failure-rate,
+throughput, universal delay-threshold or arbitrary-all32 losslessness result.
+Read scheduling, the synchronous recording workload and virtualization remain
+part of the test configuration. No physical memory capacity or internal FPGA /
+bridge root cause is inferred.
+
+All six Windows captures finished and retired. The orchestrator then encountered
+a QMP connection-reset read while Windows was exiting, before the planned Linux
+return control. That original failure is retained. After VM/process exit and
+free device ownership were verified, only the outstanding Linux 5 MS/s, 100 MB
+control was completed, with an explicit source-serial reopen. It passed RAW,
+50 consecutive CRC packets, D0, Stop/quiet and exact kernel accounting with eight
+pending INs. There were seven acquisitions total and zero capture retries.
+Windows is off and the DLA/source are free with a fresh healthy DL32 query.
+
+The private lifecycle fixture passed 62 cases, including partial/error prefixes,
+zero-progress watchdogs, cancellation and failed upload retirement. Four kernel
+accounting contracts, five QMP-exit contracts and positive/negative saved-data
+reviewer fixtures also passed. These software checks remain separate from the
+hardware results. Product source and installed Linux runtimes retain their
+baseline hashes.
+
+**AUD006 remains open; no buffered mode is integrated into the product.** A
+buffered empty read is a queue snapshot, not endpoint quiet. Enable/re-enable,
+Clear and Disable can discard completed data; the inspected driver can wait
+without a strict bound during Disable and stores a shared last-completion status.
+Worker Stop/error/overflow ownership therefore still needs its own implementation
+and qualification. SDK/SYS binaries, raw captures and the diagnostic stay private.
