@@ -197,6 +197,103 @@ Linux 5 MS/s / 100 MB, RAW, D0, 50 consecutive CRC messages and cleanup. Windows
 shut down normally; DL32 identification stayed valid. No started capture was
 retried, and no product source, timeout, queue, driver, firmware or wiring changed.
 
+## Follow-up: bounded guest scheduler profile
+
+A private forwarding observer added native process/thread IDs to each SDK
+call. Windows' existing WPR recorded ProcessThread, CSwitch and ReadyThread
+events into 64 memory buffers of 1 MiB, without stacks or active ETL disk
+writing. Each trace used its own named session. The observer remained confined
+to the acquisition helper; the product launcher, driver and timeout values
+were unchanged. The tested observer DLL SHA256 is
+`37132b4d8d95f5a1a68c112282a125b863e0c0afed95b903c514f7c6da23c2cb`.
+
+Native fixtures without DLA access verified export forwarding, data/counts,
+LastError, worker IDs, CPU work, a known wait and a deliberately delayed Ready
+thread. Clock, loss, lifetime and ownership rejection cases passed. Raw ETW
+timestamps use the same QPC frequency as the SDK observer. Absolute Windows
+timestamps are not subtracted from Linux USBmon timestamps.
+
+The first physical control, 5 MS/s and 100 MB, passed RAW conversion, D0,
+50 consecutive CRC messages and cleanup. Its strict scheduler analysis refused
+ambiguous switch-out states, so the runner stopped **before** starting 50 MS/s.
+That refusal and its original sources are retained. Windows was shut down.
+
+The analysis contract was then explicitly revised offline, before another
+acquisition: preserve those states as an unresolved off-CPU bin and report
+lower/upper bounds, accepting at most one percentage point of unresolved time.
+The original strict result remains unqualified. Native calibration and a
+masked known-Ready interval verified conservation and conservative bounds;
+no ambiguous interval was relabeled Waiting or Ready. PID/TID, complete lifetime,
+clock, event-loss and waveform checks remained in force.
+
+The saved 5 MS/s control met this contract without recapture: 0.20956 ms was
+unresolved out of 5026.92449 ms in 96 RAW-bearing reads, or 0.004169%.
+Its final empty 1014.46328 ms read remains separate, with a real zero-byte
+unconsumed tail. Its proportions are not extrapolated to 50 MS/s.
+
+One original planned 50 MS/s/100-million-sample diagnostic then ran, followed
+by one Linux return control. The VM and source connection had been reopened
+since the saved Windows control; the same source connection was held between
+this 50 MS/s run and the Linux return. No acquisition was retried.
+
+The 50 MS/s capture returned 400 MB of normalized LOGIC and quiet cleanup,
+but **failed integrity**: messages were `898501`–`898510`, `898518`–`898520`,
+then `898515`–`898520`, with two abnormal D0 periods. Independent all32 conversion
+still matches RAW. All 383 positive kernel sample-IN completions, in order,
+match 400556032 bytes of retained RAW followed by 1 MiB of unconsumed data.
+There are no passive-monitor losses or truncated positive payloads. The
+131564544-byte comparison at 128 MiB distance differs in 3335467 bytes, while
+its final **73835520 block-aligned bytes match exactly**. Each of the three
+repeated CRC messages is separated by 33554432 samples. This is another
+retained failure, not proof of a physical memory capacity or a firmware cause.
+
+The 30905-event scheduler trace and SDK log have no reported losses. For the
+382 reads represented in retained RAW, the bounded analysis gives:
+
+| Component/state | Total |
+| --- | ---: |
+| Timeout setters, separate from ReadEndP | 6.32307 ms |
+| ReadEndP wall time | 3158.24120 ms |
+| Guest-scheduled within ReadEndP | 508.99143 ms |
+| Waiting | 2605.28892 ms |
+| Ready | 36.80810 ms |
+| Standby, kept separate | 4.02386 ms |
+| Unresolved off-CPU, kept separate | 3.12889 ms (0.099071%) |
+
+Waiting is bounded by **82.4918–82.5908%**. The broader Ready-to-dispatch
+category is bounded by **1.1655–1.3919%**, including standby and unresolved
+time only in its upper bound. Median ReadEndP is 7.61396 ms, maximum 38.70057 ms;
+the older approximately 600 ms call did not recur. The extra 1 MiB read after
+the RAW target took 7.54715 ms and is excluded from these acquisition totals.
+The longest call has 37.44961 ms Waiting and 0.06193 ms Ready. These observations
+do not justify a thread-priority change or timeout-setter optimization.
+
+At the Linux observation point, ARM completion to the last retained-RAW
+completion took 3.200787 s: sample-IN requests were pending for 2.328829 s
+and absent for 0.871958 s, with at most one pending request and a longest
+no-pending interval of 32.805 ms. These are separate clock-domain intervals,
+not physical bus utilization or an absolute ETW-to-USB alignment.
+
+After named-WPR cleanup, protected detach and normal Windows shutdown, the
+Linux 5 MS/s/100 MB control passed independent RAW conversion, D0 and 50
+consecutive CRC messages. DL32 identification remains healthy, with the DLA
+and source released. All 1248 product source-file hashes, HEADs, existing
+differences and Linux installation hashes remain unchanged.
+
+Guest-scheduled time includes possible DPC/ISR execution and host pauses of
+the vCPU; it is not measured physical CPU time. Guest Waiting does not locate
+the cause inside WCH, the kernel driver, QEMU, VMware or the device. Stock
+tracerpt cannot decode all Thread-v3 metadata here: the retained raw payload's
+PID/TID prefix alone is read with its pinned Microsoft schema; CSwitch-v4 and
+ReadyThread-v2 use native decoding. Instrumentation changes timing and this
+fixed cohort does not estimate its overhead or a failure rate. ETL, SDK logs,
+commercial DLLs and captures remain private. This publishes diagnostic evidence,
+with AUD-006 still open; no speculative product change is promoted.
+
+Schema/clock references: [Microsoft CSwitch](https://learn.microsoft.com/en-us/windows/win32/etw/cswitch),
+[ETW QPC context](https://learn.microsoft.com/en-us/windows/win32/etw/wnode-header),
+[Microsoft ThreadTraceData schema](https://github.com/microsoft/perfview/blob/9f071a5cb2e70cdfee13abc510344ab1e8840c90/src/TraceEvent/Parsers/KernelTraceEventParser.cs).
+
 ## Remaining limits
 
 A separate cold Linux 5 MS/s capture after hub recovery also returned 100 MB
