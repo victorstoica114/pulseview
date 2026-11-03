@@ -2,7 +2,7 @@
 
 Windows hardware testing resumed on November 3. This updates the earlier
 owner-deferred Windows status for the checks listed below. It does **not**
-qualify arbitrary long Stream captures at 50 MS/s: the last additional run
+qualify arbitrary long Stream captures at 50 MS/s: retained additional failures
 returned the requested sample count while skipping and repeating source data.
 The failure and the successful controls are both retained.
 
@@ -105,7 +105,7 @@ The final ordinary start/attach/detach path repeated Windows 100 MB followed
 by Linux 100 MB at 5 MS/s with the same source connection kept open throughout;
 RAW, D0, 50 consecutive messages per OS, cleanup and identification passed.
 
-## The final additional 50 MS/s run failed integrity checks
+## Protected-launcher 50 MS/s integrity failure
 
 With that ordinary protected launcher, finite Stream delivered 100 million
 samples / 400 MB and reported complete with quiet cleanup. Nevertheless:
@@ -293,6 +293,73 @@ with AUD-006 still open; no speculative product change is promoted.
 Schema/clock references: [Microsoft CSwitch](https://learn.microsoft.com/en-us/windows/win32/etw/cswitch),
 [ETW QPC context](https://learn.microsoft.com/en-us/windows/win32/etw/wnode-header),
 [Microsoft ThreadTraceData schema](https://github.com/microsoft/perfview/blob/9f071a5cb2e70cdfee13abc510344ab1e8840c90/src/TraceEvent/Parsers/KernelTraceEventParser.cs).
+
+## Follow-up: imported Win32 call boundaries
+
+The retained ETW trace reports the same nonspecific wait-reason code for all
+382 RAW-bearing reads. A new private observer therefore brackets the SDK's
+LocalAlloc, DeviceIoControl, memcpy and LocalFree imports. It changes only four
+import slots in the SDK mapped into the isolated helper process; no instruction
+bytes, on-disk commercial DLL, product code or launcher are changed. Logs remain
+in memory until Close. The observer stays mapped for the private process's
+lifetime. DLL SHA256:
+`268f3a97d201258ff8cb34301f045dfacf2fb8aa0e9c776d134aa1bf211e3240`.
+
+Guarded native fixtures verified all seven SDK exports and four imported
+function ABIs, arguments, buffers/counts, LastError, partial failure, successful
+BOOL value 2, thread IDs, loss rejection and existing-log refusal. A load-only
+test of the actual commercial SDK calls no SDK/device export: only those four
+import slots change, other imports/instructions and executable-page protections
+remain intact. The full wrapper and hashed transfer manifest pass with a fake SDK.
+
+The fixed physical cohort was one Windows 5 MS/s/100 MB control with this new
+instrumentation, one 50 MS/s/400 MB diagnostic, then protected detach, normal
+Windows shutdown and Linux 5 MS/s/100 MB. The same source connection remained
+open within this cohort. No buffer, timeout, priority, firmware or wiring changed;
+no acquisition was retried. **All three cases passed their bounded data checks.**
+The single 50 MS/s diagnostic has normal D0 periods and 20 consecutive CRC
+messages `801501`–`801520`, with exact independent all32 RAW conversion.
+This positive observation does not remove the earlier retained failures or
+establish a fix, a failure rate or arbitrary all-channel continuity.
+
+For the 382 SDK reads represented in retained RAW at 50 MS/s:
+
+| Observed interval | Total |
+| --- | ---: |
+| ReadEndP wall time | 2981.35011 ms |
+| LocalAlloc bracket | 12.16568 ms |
+| DeviceIoControl bracket | 2889.37615 ms (96.9150%) |
+| memcpy bracket | 33.07392 ms |
+| LocalFree bracket | 22.85785 ms |
+| Residual, including observer overhead | 23.87651 ms |
+
+The memory-operation brackets sum to 68.09745 ms, or 2.2841% of this observed
+ReadEndP time. This does not demonstrate their causal role in the earlier
+failures or qualify an allocator bypass. The synchronous DeviceIoControl
+boundary includes work/wait below the user SDK; it does not identify a cause
+inside the Windows driver, USB stack, QEMU, VMware or the device. No new ETW is
+recorded here, so the earlier Waiting/Ready proportions are not transferred
+onto these new calls. All brackets include instrumentation costs; their times
+are not physical CPU execution or bus utilization.
+
+Both SDK/API logs are complete and bound by PID/TID/QPC, with no unowned import
+calls. All 383 positive kernel sample-IN completions already match retained
+RAW 400556032 B followed by the separate 1 MiB unconsumed tail. ARM to last-RAW
+completion is 3.024131 s: 2.324913 s with sample-IN pending, 0.699218 s without,
+at most one pending request, longest absence 5.022 ms. Absolute timestamps from
+the two clock domains are not subtracted. The extra unconsumed read (7.03999 ms)
+and the 5 MS/s control's final zero-payload read (998.89807 ms) are excluded from
+their RAW-bearing timing totals and preserved separately.
+
+The Linux return passed RAW/D0/50 consecutive CRC messages and cleanup. DL32
+remains healthy; Windows is stopped and both DLA and source are released.
+All 1248 product files, HEADs, existing differences and installed Linux binaries
+remain unchanged. Only this evidence is published; instrumentation, raw traces
+and commercial material stay private. AUD-006 remains open beyond the measured
+Win32 boundary, without a speculative product change.
+
+API contracts: [DeviceIoControl](https://learn.microsoft.com/en-us/windows/win32/api/ioapiset/nf-ioapiset-deviceiocontrol),
+[module lifetime](https://learn.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-getmodulehandleexw).
 
 ## Remaining limits
 
