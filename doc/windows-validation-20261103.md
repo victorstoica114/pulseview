@@ -130,6 +130,73 @@ After protected detach, Windows shut down normally. A separate Linux 5 MS/s
 consecutive messages and cleanup. DL32 identification remained valid.
 This successful recovery does not invalidate the failed 50 MS/s capture.
 
+## Follow-up: kernel wait and separate SDK calls
+
+An offline comparison of the successful and failed finite 50 MS/s runs above
+finds identical runtime hashes and all four command payloads. Each trace has
+383 positive sample-IN completions, with at most one request pending. All
+401604608 kernel payload bytes equal the retained RAW followed by the separate
+1 MiB worker-unconsumed tail, in order.
+The prior device/VM states differ; this is a timing comparison of retained
+observations, rather than a controlled causal comparison.
+
+| ARM completion to last RAW completion, outer Linux trace | Successful run | Failed run |
+| --- | ---: | ---: |
+| Total | 2.792663 s | 3.800403 s |
+| At least one sample-IN pending | 2.321083 s | 2.322883 s |
+| No sample-IN pending | 0.471580 s | 1.477520 s |
+| Longest interval without a sample-IN | 2.001 ms | 601.701 ms |
+
+The failed run's second worker read takes 600.871 ms in Windows; its associated
+Linux sample-IN takes 6.339 ms. This separates the observed sample-IN lifetime
+from the wider call boundary. A pending request is not measured physical bus
+occupancy. Windows QPC and Linux usbmon remain separate clock domains.
+
+A fixed private profiling cohort then used a forwarding SDK observer qualified
+with a deterministic fixture. It preserves SDK arguments, data, lengths and
+LastError; metadata stays in memory until device close. Instrumentation changes
+timing, and the following cases do not measure its overhead or a failure rate:
+
+Observer DLL SHA256:
+`147debb0aa5ed3b9f1e701758d7ad2afd8c341e6960c371e2a01d4073a77fd54`.
+
+| Physical finite Stream case | LOGIC | Witness result |
+| --- | ---: | --- |
+| Observed 25 MS/s control | 400 MB | D0 and 40 consecutive CRC messages pass |
+| Unobserved 50 MS/s baseline | 400 MB | D0 and 20 messages pass |
+| Observed 50 MS/s | 400 MB | Six-message forward gap, backwards sequence and two D0 anomalies; failed |
+
+All three preserve exact independent all32 RAW conversion, complete kernel
+payload accounting, quiet cleanup and unconsumed data separately. SDK logs
+report no omitted metadata. The same source connection stayed open across the
+three Windows cases. The two 50 MS/s cases use identical command bytes.
+
+For the 382 SDK reads represented in accepted RAW, the observed failed run has:
+
+* Timeout setters: 6.20697 ms total, median 13.97 microseconds, maximum 223.02
+  microseconds.
+* ReadEndP: 3.17839981 s total, median 8.31598 ms, maximum 14.15209 ms.
+
+Removing all measured setter time would address less than 0.2% of the combined
+setter/read duration in this instrumented trial. No timeout caching or value
+change is justified. The older 600 ms wrapper event did not recur here, so this
+does not locate its internal cause.
+
+The new failed packet order is 930001–930012, 930019–930020, then
+930015–930020. Both occurrences of 930019 and 930020 are exactly 33554432 samples
+apart. At the corresponding 128 MiB RAW distance, a block-aligned suffix of
+36086784 bytes is identical, already in the Linux kernel payload. The full
+131564544-byte comparison region is **not** identical in this new run; do not
+substitute the older complete-region replay result or infer physical memory
+capacity from either observation.
+
+The first planned Linux return was refused before hardware acquisition because
+the private runner supplied an out-of-range source counter. That refusal is
+retained. A separate return with a valid counter and reopened source passed
+Linux 5 MS/s / 100 MB, RAW, D0, 50 consecutive CRC messages and cleanup. Windows
+shut down normally; DL32 identification stayed valid. No started capture was
+retried, and no product source, timeout, queue, driver, firmware or wiring changed.
+
 ## Remaining limits
 
 A separate cold Linux 5 MS/s capture after hub recovery also returned 100 MB
