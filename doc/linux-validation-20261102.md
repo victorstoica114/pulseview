@@ -212,3 +212,56 @@ change only removes a redundant GUI notification; acquisition, transport,
 firmware and file parsing are unchanged. No new acquisition integrity or
 corrupt-file fuzzing guarantee is claimed. AUD013/022 and the earlier transport
 limits remain open.
+
+
+## Guest-kernel first-data observation, 3 November 2026
+
+A retained baseline helper using the real Session and native XCB View classes
+reproduced the untriggered 50 MS/s startup failure with passive guest usbmon.
+It uses core SHA-256 84c0c7da14777f27871587dfbda1a0645231d051bc10d51feb089c5769757890,
+C++ 20ec72bc and SDK ff037c43; helper b19a9db3 is the original baseline, not the
+private early-trim candidate or a newly qualified current GUI acquisition.
+Linux is inside VMware, DLA 1a86:5537 at 4-1/bus4/address9, 5000 Mb/s. Windows
+remained off; no explicit USB reset, clear-halt, handover or firmware change.
+
+The first all32 / 1.60 V Stream run delivered 95420416 RAW bytes and stopped during
+an active window. Its two overlapping frames (20M complete and 13592899 partial
+samples) match independent RAW transposition, archived payload/metadata, D0
+periods 49–51 samples and consecutive CRC-checked D22 UART through two decoders.
+Guest-kernel IN payload matches every accepted RAW byte; a further 1 MiB completed
+before the final OUT Stop but was retired with stopping=true in userspace.
+It is retained separately in the kernel trace, not silently merged into RAW.
+
+The next Stream-window start used byte-identical setup/ARM commands, all32 and
+no hardware trigger. Eight 1 MiB sample IN requests were submitted to the guest
+HCD before ARM. No positive completion followed during the approximately 3.044 s
+before final Stop submission; the driver first-data watchdog fired. All eight
+original reads finished cancelled with zero bytes, before that final Stop OUT.
+The Stop OUT completed successfully; new synchronous drain reads then returned
+64 MiB with status0 and no empty read. The bounded drain therefore reported cleanup
+failure and the fixture stopped. The64MiB value is the existing host drain
+bound, not a measurement of device buffer capacity. The planned finite-return
+phase did not run.
+The failed accepted RAW remains 0 B and all earlier/partial files are retained.
+
+The drain includes three CRC-checked source messages whose serial commands were
+sent approximately 102/203/304 ms after the host Stop completion. Both UART readers
+agree. Monotonic/realtime anchors before and after the run differ by about 21 us;
+the comparison does not assume a kernel timestamp epoch. These witnesses rule
+out interpreting all returned drain bytes as an old pre-Stop static backlog.
+A successful OUT is still not a firmware execution acknowledgment, and the
+observation does not locate the fault in firmware, FPGA, USB bridge, guest HCD
+or the outer VMware transport.
+
+All 370 monitor events form 185 closed URB pairs, with zero reported drops,
+queued events, truncation or write failure. All eight 2048-byte commands match
+the logged prefixes and expected padding; framing/CRC are independently checked.
+Disk diagnostics change timing: this is one instrumented reproduction, not a
+failure-frequency measurement. Serial opening emitted source POWERON_RESET boot
+text with DTR/RTS false, without a reset command; no cause is attributed to that.
+
+No product fix, added delay, drain-bound increase or automatic retry follows
+from this evidence. Further captures require recovery from the non-quiet state.
+This new failure has a late-data/non-quiet-drain dimension, unlike the earlier
+zero-data/quiet-drain observation; they are not asserted to share an internal
+cause. AUD013 stays private, AUD022 remains open, and Windows stays deferred.
