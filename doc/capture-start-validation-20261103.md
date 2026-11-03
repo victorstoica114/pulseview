@@ -100,3 +100,72 @@ new firmware conclusion follows from these tests.
 The candidate stays private. Buffer transition/integrity, AUD-006 and first-data
 failures remain open; the new partial-data stalls are distinct from the earlier
 zero-byte cases. No failure was hidden by a successful retry or transport reset.
+
+## Follow-up: short Buffer repetition is present in the kernel trace
+
+2026-11-03, after the fixed cohorts above. A new Linux-only control adds passive
+usbmon to the original Session's unchanged Stream → cancellation → Buffer
+sequence, followed by one Stream return. There is no added wait/gate between
+the three Session captures. The installed core remains `84c0c7da`, the frontend
+Session remains the original `64e41f8d`, USB remains 5000 Mb/s at 4-2/dev16.
+The source, wires, firmware and hub state are preserved; Windows stays off.
+This is four additional captures with zero retries, not a positive replacement
+for any of the earlier failures. The complete retained local source snapshot
+has 477 core files, repo HEAD `016c813c` with its existing local modifications;
+this measurement is scoped to that snapshot and installed binary.
+
+The passive device-filtered parent trace contains 370 events/185 closed URBs,
+128,974,848 sample-payload bytes, and zero dropped, queued, truncated or failed
+monitor events. Four contiguous derived scopes preserve every record in order.
+Their counters are explicitly derived from that loss-free parent, not presented
+as four new monitor measurements. Discovery/control bytes remain preserved.
+All saved RAW matches the corresponding kernel completion bytes exactly; sample
+completion order also matches submission order in every scope. No sorting or
+sample repair is used.
+
+| Capture, 5 MS/s/all32 | Saved LOGIC | Result |
+| --- | ---: | --- |
+| Finite Stream, 5M target | 20,000,000 B | D0 bad0; CRC823006–823024, both UART decoders agree |
+| Stream, 25M target, Stop300ms | 3,145,728 B | stopped; D0 bad0; CRC823029–823031, decoders agree |
+| Buffer, 5M target | 4,194,304 B | timeout;257 bad D0 periods, no recognized CRC message, decoders disagree |
+| Finite Stream return, 25M target | 100,000,000 B | D0 bad0; CRC824001–824050, decoders agree |
+
+Independent all32 RAW conversion matches all four saved LOGIC payloads,
+including the failed Buffer's actual partial recording. Fetched RAW beyond the
+finite LOGIC target remains in the original trace: 971,520 B for the first Stream
+and 663,296 B for the return. There are no other positive sample bytes outside
+the saved RAW. Source acknowledgments are complete. The final return, END,
+quiet cleanup, released DLA/source and powered-off Windows are verified.
+
+The Buffer's first and fourth 1 MiB blocks are identical byte for byte, at RAW
+offsets 0 and 3,145,728. The same equality is present in two distinct initial
+kernel IN requests, both submitted before ARM completed. Their payload SHA-256
+is `2595719cc93e32cdec1ecbcb0b8189b160aac9dee1623ed7a10da55b70dfa9c9`.
+All four accepted requests complete successfully with 1 MiB each. The first data
+arrives 677,180 µs after ARM completion, the fourth at 694,719 µs. Then no more
+positive sample data arrives before cleanup.
+
+The last data completion precedes the first cancellation retirement by
+3,045,450 µs and the Stop submission by 3,046,252 µs. IN requests remain pending
+throughout the interval before cleanup, with maximum depth 8. After the last
+cancellation, only 80 µs has no pending IN before Stop. Thus this stall does not
+show a missing-read-request gap before cleanup. Two post-Stop reads are empty;
+there is no unaccounted late sample payload.
+
+The retained reader passes ten contracts covering byte mismatch, missing or
+cross-scope ownership, trace truncation/loss, command CRC, cancelled partial
+tails, empty RAW and an intentionally out-of-order completion fixture. That
+fixture is reported out of order rather than sorted into a passing sequence.
+An initial analysis incorrectly required pending reads until the Stop packet;
+the corrected report includes the measured 80 µs cleanup gap explicitly.
+
+The repeated payload that fails the current waveform checks is already visible at the outer Linux VMware guest's
+kernel observation, before frontend conversion and storage. This excludes a
+frontend copy or conversion error as a necessary explanation for these specific
+repeated bytes. It does not separate device/FPGA, USB, hypervisor or host-kernel
+causes, or establish whether Buffer output obeys the assumed format in this
+transition. With no recognized numbered UART message in the bad prefix, it also
+does not identify the physical times or acquisition from which bytes originated.
+No queue capacity, universal deadline, native physical-Linux qualification or
+arbitrary all32 electrical integrity is inferred. No source correction is
+promoted; AUD-006/Buffer and the private AUD-025 qualification remain open.
