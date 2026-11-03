@@ -727,3 +727,47 @@ positive high-rate capture do not establish a fix for the previously observed
 gaps/replay or this Buffer timeout. Only this evidence report is published;
 private source experiments, raw captures, commercial binaries and VM material
 are not included.
+
+
+## Private pre-Stop observer qualification, 22:13–22:15 UTC
+
+Offline comparison keeps the zero-data observations distinct. The failed
+Windows Buffer trial has zero sample bytes before and after Stop; Linux AUD022
+has zero before Stop and 64 MiB after replacement reads. The older Windows
+AUD018 trial has no retained bus trace for its capture, so kernel counts remain
+unknown. The passed/failed Buffer trials have identical full commands, cached
+configuration and recorded initial IN request fields. Their preceding high-rate
+Stops were 30.001112/26.546837 s earlier; this does not justify an empirical
+settle-delay increase or establish a safe delay.
+
+A separate private Windows observer can make one nominal 1 MiB / 20 ms direct
+read after successful Disable and before Stop, only on an untriggered first-data
+timeout with no bytes received. An exclusive diagnostic file keeps every returned
+byte outside accepted RAW/LOGIC. Persistence failures, partial/error reads and
+explicit device loss are checked. A positive diagnostic would show only that
+Stop was not necessary for renewed data in that trial; Disable/queue discard,
+cancellation, replacement read, elapsed time and instrumentation remain factors.
+
+The observer core SHA256 is
+`eba0c655f8522bed70dcd175fc9dc5bc3aecaee3f23003d1cd154cd30d00dfc3`;
+its frozen 477-source manifest is
+`d90d507cacfbe9e2b7482066bcb73c586768a4bf68181b001ab7d418ca3081a0`.
+It passes 21 new fake-SDK/stdio cases, 30 C driver/session regressions, three
+public C++ lifetime cases, 122 C checks and C++ cleanup. Nine saved-trace/scope
+contracts also pass. Linux uses the already qualified core `90f6a08f...`;
+preprocessed API tokens are identical with the same configuration and canonical
+source macro paths, because the new diagnostic code is Windows-only.
+
+One fixed four-capture hardware plan then completed with zero capture retries:
+Windows Stream 5 MS/s / 100 MB, Stream 50 MS/s / 400 MB, Buffer 5 MS/s / 100 MB
+and Linux Stream 5 MS/s / 100 MB return. All pass independent RAW conversion,
+D0, kernel prefix/tail conservation and 50/20/50/50 fresh consecutive D22 CRC
+packets, respectively. Source connection, SDK/SYS, wiring and negotiated USB3
+were retained; no reset, hub cycle, flash or product installation changed.
+
+**The selected diagnostic branch was not exercised physically:** Buffer completed
+normally, with no pre-Stop diagnostic file/read. This successful control does not
+attribute an effect to the observer, refute the retained zero-byte failure or
+qualify a recovery mechanism. The plan is closed and is not repeated blindly.
+Windows is off and DLA/source are free. AUD006 and the first-data cause remain
+open; private observer source/binaries are not promoted to the product.
