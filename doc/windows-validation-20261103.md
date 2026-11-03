@@ -472,6 +472,64 @@ that both cohorts have the same cause. All eight original captures and their
 failures remain unchanged. This supplies a more specific reproduction signature,
 without inferring physical buffer capacity, repairing data or closing AUD-006.
 
+## Follow-up: controlled native Linux read pause
+
+A fixed physical cohort now tests the current 5000 Mb/s Linux/libusb path,
+with Linux in VMware and Windows/nested QEMU/KVM kept off. Two private native
+cores are rebuilt from the same 477 current source files; their only source
+difference is `NUM_TRANSFERS` 8 versus 1. Neither is installed. The helper,
+source v8 configuration, wires, firmware, threshold and capture commands are
+preserved. All four 2048-byte command packets match across the three 50 MS/s
+cases, including framing/CRC.
+
+There are five acquisitions, without retry: 5 MS/s/100 MB with eight INs,
+50 MS/s/400 MB with eight INs, 50 MS/s/400 MB with one IN, the same one-IN case
+with a single controlled helper pause, then 5 MS/s/100 MB with eight INs.
+The first control passed but an incorrect loader check stopped before 50 MS/s:
+this C helper loads only the C core, not C++/decoder libraries. ELF/maps and the
+saved data qualified that control offline; it was not repeated. The source
+connection was then reopened and kept through the remaining four captures.
+
+Only after both normal 50 MS/s cases passed, an independent controller paused
+the owned capture process using SIGSTOP/SIGCONT after the first observable
+1 MiB RAW. PID/start-time/executable checks and native interruption/orphan
+fixtures validate resumption. The actual pause was **700.688167 ms**; kernel
+completion-to-next-submit time after that first 1 MiB was **702.757 ms**.
+The parent continued seven numbered host writes during the pause; all have
+source acknowledgements by the end. These are not electrical UART timestamps.
+
+| 50 MS/s case | Bounded data | ARM → last RAW completion | At least one IN pending | No IN pending | Longest no-IN interval |
+| --- | --- | ---: | ---: | ---: | ---: |
+| Eight INs, normal | Pass | 2254.229 ms | 2254.229 ms | 0 ms | 0 ms |
+| One IN, normal | Pass | 2731.033 ms | 2318.834 ms | 412.199 ms | 3.011 ms |
+| One IN, controlled pause | **Fail** | 3449.114 ms | 2319.036 ms | 1130.078 ms | 702.757 ms |
+
+Both normal cases have normal D0 and 20 consecutive CRC messages. The paused
+case completes the requested count and clean Stop/END, but has two abnormal D0
+periods and the sequence `804508`–`804520`, then `804515`–`804520`. All
+131564544 compared RAW bytes are identical at 128 MiB distance, with six complete
+repeated CRC markers separated by 33554432 samples. The first abnormal D0 bracket
+is 276462–276503, internal to the second 1 MiB completion; the second is
+67108860–67108868, spanning RAW 256 MiB. No data is reordered or repaired.
+
+Each 50 MS/s case has 382 positive kernel IN completions: all 400556032 B match
+preserved RAW in original order, including input beyond the 400000000 B LOGIC
+limit. Independent all32 conversion matches LOGIC. All kernel bytes are
+accounted, without trace loss; canceled/unused categories are kept explicitly.
+Pending/gap totals use host realtime; guardian/source MONOTONIC times are not
+absolutely aligned to it. Pending is not physical bus utilization.
+
+Both 5 MS/s controls pass RAW/D0/50 consecutive CRC messages. DL32 remains
+healthy, with DLA/source released and Windows off. All 1248 product files,
+existing differences and installed Linux binaries remain unchanged.
+
+**This controlled read-pause treatment reproduces the replay signature without
+Windows, WCH or nested QEMU.** It does not establish identical internal causes
+for the previous Windows failures, a universal pause threshold, physical buffer
+capacity or a firmware cause. This is one ordered cohort, without an overhead
+or failure-rate estimate. The one-IN diagnostic is private and has no Windows
+qualification. No acquisition fix is promoted; AUD-006 remains open.
+
 ## Remaining limits
 
 A separate cold Linux 5 MS/s capture after hub recovery also returned 100 MB
