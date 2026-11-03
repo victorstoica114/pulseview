@@ -632,3 +632,98 @@ Clear and Disable can discard completed data; the inspected driver can wait
 without a strict bound during Disable and stores a shared last-completion status.
 Worker Stop/error/overflow ownership therefore still needs its own implementation
 and qualification. SDK/SYS binaries, raw captures and the diagnostic stay private.
+
+
+## Private worker retirement and preserved Buffer timeout, 21:28–21:34 UTC
+
+A second private libsigrok candidate integrates the buffered lifecycle into the
+real native worker/session. Its Windows core SHA256 is
+`10d7283dde101b4462a56004ff19f2f74b0ea6272f80a0df2f785e427c54381d`;
+the corresponding Linux core is
+`90f6a08f020a577858f8502abdc863701455409c83761995d06dec22716a25b6`.
+The private helper is `6603e1b9...`; SDK `db19ce17...` and SYS `afa9f449...`
+remain unchanged. The frozen 477-file source manifest SHA256 is
+`3f1d157c1cfe48fbccb1edf6d50f42ffe915081bf785f27f8e92d6cebf4a60e9`.
+Product source and installed Linux runtimes retain their baseline hashes.
+
+Before changing the candidate, controlled native SDK fixtures reproduced
+main-thread Disable during failed Enable/ARM, Close retry and inactive Stop.
+A Win32 event deliberately holds the simulated SDK until the test releases it;
+this does not demonstrate an actual vendor-SDK or electrical hang.
+
+| Public API operation | Earlier private worker call, ms | Revised call, ms |
+|---|---:|---:|
+| Start with Enable error | 1006.671 | 116.823 |
+| Start with ARM error | 1016.895 | 102.197 |
+| Close after failed retirement | 767.043 | 0.206 |
+| Stop after END with pending retirement | 750.450 | 0.128 |
+
+The revision creates the native owner before Enable, then explicitly hands off
+I/O after main's handshake. Disable runs only on that worker. A failed thread
+creation precedes Enable; Scan and a new Start are refused while the shared SDK
+index/queue is owned. Failed Enable/ARM after HEADER dispatch error/END through
+the session after retirement. Close can return busy and succeed on a later retry;
+it never frees a live worker or certifies failed cleanup as success.
+
+The tests also caught and preserved two C++ context-cleanup failures after
+explicit device loss, and extra SDK calls from a subsequent Stop. The revised
+paths release only the stale host handle after native exit, without another
+Disable/Stop. Thirty C driver/session cases and three public C++ lifetime cases
+pass, including held retirement, failed thread creation, scan/start refusal,
+partial/timeouts, cancellation, repeated acquisition and context quarantine /
+retry. Every delivered fixture byte has an independent bitwise oracle, and the
+local IAT hooks/protections are restored. Both platforms pass 122 C checks and
+the C++ cleanup test. These fixtures use a fake SDK with no DLA attached.
+
+Hardware then followed one fixed seven-acquisition plan on the same negotiated
+USB3 link, source v8, wiring and D0/D22 witnesses. Windows remains nested in
+Linux/VMware. There were zero capture retries:
+
+| Phase | LOGIC bytes retained | Status | D0 anomalies | Consecutive fresh D22 CRC packets |
+|---|---:|---|---:|---:|
+| Windows Stream 5 MS/s pilot | 100,000,000 | complete | 0 | 50 |
+| Windows Stream 50 MS/s | 400,000,000 | complete | 0 | 20 |
+| Windows Buffer 5 MS/s, 100 MB requested | 0 | **timeout** | unavailable | unavailable |
+| Remaining Windows Stream 5 MS/s | 100,000,000 | complete | 0 | 50 |
+| Windows Stream 5 MS/s, cancel requested at 300 ms | 5,242,880 | stopped, partial | 0 | 3 |
+| Windows Stream 5 MS/s recovery | 100,000,000 | complete | 0 | 50 |
+| Linux Stream 5 MS/s return | 100,000,000 | complete | 0 | 50 |
+
+The **Buffer zero-data failure is retained**, not retried or replaced by a
+passing capture. The monitor has 24 events / 12 closed pairs and zero positive
+sample-IN bytes. A 1 MiB IN remained pending for 8.035057 s before cancellation;
+ARM-to-Stop is 8.035021 s. All four 2048-byte commands completed successfully and
+match an earlier passed private Buffer capture byte for byte. The source has
+82 ACKs for 82 commands and no unknown-command response. There were 512 empty
+SDK reads. HEADER/END are unique, timeout is reported, and Stop, two empty direct
+drains and cleanup complete. No D0/D22 electrical witness exists for this
+zero-byte capture, and neither command acceptance nor identification establishes
+its internal cause. No firmware, FPGA, source or driver cause is inferred.
+
+The original orchestrator stopped at that failure and shut Windows down normally.
+After fresh identity/ownership/source checks, Windows was restarted without the
+DLA and the serial connection was explicitly reopened. Only the four original
+unexecuted phases were then completed. This interruption means an uninterrupted
+Buffer-to-Stream transition is **not qualified** on this revision. Both original
+and resumed execution records, including the original failed result, are kept.
+There was no hub cycle, device reset, driver replacement or firmware change.
+
+For every nonempty capture, independent all32 RAW conversion is exact and saved
+RAW is the exact kernel sample-stream prefix in original order. Unused payloads
+are separately conserved: 2 MiB after the 50 MS/s capture and 1 MiB after cancel
+were present in kernel evidence but were not fetched by the application worker.
+The cancel callback ran 311.191 ms after Start returned; the retained prefix is
+explicitly partial, with complete=false. Windows kernel maximum IN depth was
+one; Linux return had eight, with no no-IN-pending gap. These counts are not
+Windows internal IRP counts. Both VM-exit proofs are preserved; Windows is off,
+the DLA/source are free and the final healthy identification query succeeded.
+
+**AUD006 remains open; this candidate is not qualified for product release.**
+Six bounded witness results and one correctly reported zero-data failure do not
+prove arbitrary32 continuity, a failure rate, overflow detection or a universal
+SDK-call deadline. Disable can still wait indefinitely on its worker; GUI and
+SDK queue memory/overflow remain unqualified. The ownership improvements and
+positive high-rate capture do not establish a fix for the previously observed
+gaps/replay or this Buffer timeout. Only this evidence report is published;
+private source experiments, raw captures, commercial binaries and VM material
+are not included.
