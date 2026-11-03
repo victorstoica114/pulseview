@@ -429,6 +429,49 @@ Trace definitions: [QEMU 11.1.2 USB events](https://github.com/qemu/qemu/blob/v1
 [xHCI markers](https://github.com/qemu/qemu/blob/v11.1.2/hw/usb/hcd-xhci.c),
 [usbmon timestamp source](https://github.com/gregkh/linux/blob/v7.2.9/drivers/usb/mon/mon_bin.c).
 
+## Follow-up: replay boundaries in saved captures
+
+An offline review rechecks three retained Windows 50 MS/s failures and two
+positive controls. It reads D0 directly from RAW lane bits and independently
+compares every edge with LOGIC, validates the numbered UART packets against
+both saved decoders, and rechecks all 383 positive kernel INs against RAW plus
+the separate tail in each case. No new acquisition or product change is made.
+Six offline fixtures cover chunk-edge transitions, exact suffix boundaries,
+partial markers and periodic/static data without distinct marker evidence.
+
+For the three failures, the first abnormal D0 rising-to-rising intervals are:
+
+| Source counters | Closed D0 sample bracket | Aligned exact suffix at 128 MiB distance |
+| --- | --- | ---: |
+| 895xxx | 7092199–7092251 | 131564544 B |
+| 930xxx | 57423871–57423877 | 36086784 B |
+| 8985xx | 47986642–47986704 | 73835520 B |
+
+The latter two aligned suffixes start at RAW offsets 229695488 and 191946752,
+respectively: both are **57344 B (56 KiB) inside a single 1 MiB kernel
+completion**, within the corresponding first D0 bracket. Their preceding
+32-byte blocks differ at the same comparison distance. All three first D0
+brackets permit this common aligned request-relative position; the older
+895xxx bracket does not fix an exact splice. Each second abnormal D0 bracket
+contains sample 67108864, the RAW 256 MiB boundary.
+
+The exact suffixes contain six, two and three complete repeated CRC markers,
+respectively, each separated by 33554432 samples. This avoids treating periodic
+clock/static-lane equality alone as replay evidence. The two positive controls
+have no D0 anomaly, no such repeated markers and no aligned suffix in the same
+comparison extent. The observations already occur inside individual kernel
+completions; reordering whole 1 MiB completions or RAW conversion alone cannot
+explain this internal witness boundary. They do not identify its generating layer.
+
+A separately rechecked historical Linux cohort at **480 Mb/s** contains replay
+and other internal D0 positions, including a finite zero-pause failure and an
+explicit 700 ms paused failure; its below-extent paused control passes. These
+are different transport/test conditions, with no saved kernel payload trace
+for that cohort. They neither make 56 KiB a universal device boundary nor prove
+that both cohorts have the same cause. All eight original captures and their
+failures remain unchanged. This supplies a more specific reproduction signature,
+without inferring physical buffer capacity, repairing data or closing AUD-006.
+
 ## Remaining limits
 
 A separate cold Linux 5 MS/s capture after hub recovery also returned 100 MB
