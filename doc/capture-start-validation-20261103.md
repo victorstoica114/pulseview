@@ -253,3 +253,87 @@ remain unchanged. Only this validation document is published; the one-IN driver
 and AUD-025 candidate remain private. Both cohorts finish with a verified100MB
 Stream return and released DLA/source. Buffer/AUD-006 and AUD-025 qualification
 remain open.
+
+## Follow-up: compare the preceding mode while holding its target at25M
+
+2026-11-04 UTC. Two further fixed Linux VMware cohorts compare the acquisition
+preceding the short Buffer capture. Each is limited to three captures with no
+retry and finishes with an installed-driver Stream return. The original Session,
+all other frontend objects and installed eight-IN core `84c0c7da` are retained.
+Only private diagnostic fixtures change; there is no new product source or
+Windows binary. Source v8/PWM1MHz50%, wiring, firmware, hub and USB4-2/dev16 at
+5000Mb/s are preserved. Windows stays off, with no simultaneous acquisition.
+
+The first cohort runs Buffer25M → Buffer5M in the same Session. Both complete
+and pass their delivered-data witnesses. The second changes only the first
+capture's data source and diagnostic label: Stream25M → Buffer5M. The first
+target remains25M, the second5M, both at5MS/s/all32, without a trigger. There is
+no added delay/gate, reset, fault injection or dummy capture in either cohort.
+A prior Stream acquisition precedes these cohorts; first-in-Session does not
+mean no device history.
+
+| Cohort/capture at5MS/s | Delivered LOGIC | Outcome and bounded witnesses |
+| --- | ---: | --- |
+| Buffer predecessor, Buffer25M | 100,000,000 B | complete; D0 bad0; CRC829006–829099,94 consecutive |
+| Buffer predecessor, Buffer5M | 20,000,000 B | complete; D0 bad0; CRC829132–829150,19 consecutive |
+| Stream return25M | 100,000,000 B | complete; D0 bad0; CRC830001–830050,50 consecutive |
+| Stream predecessor, Stream25M | 100,000,000 B | complete; D0 bad0; CRC831006–831099,94 consecutive |
+| Stream predecessor, Buffer5M | 4,194,304 B | timeout;172 bad D0 periods; no recognized CRC message |
+| Stream return25M | 100,000,000 B | complete; D0 bad0; CRC832001–832050,50 consecutive |
+
+Five of six captures pass the bounded witnesses; one fails. Two independent
+UART decoders agree on every passing row and disagree on the failed Buffer.
+Independent all32 RAW conversion matches all six actual saved LOGIC payloads,
+including the partial failure. Complete source acknowledgments and original
+failure metadata remain retained. A diagnostic exit status of zero means its
+fixed sequence finished and saved the results; it does not turn the recorded
+Buffer timeout into a passing capture.
+
+The first loss-free passive trace contains520 events/260 closed URBs and
+224,395,264 sample bytes; the second486 events/243 closed URBs and205,520,896
+sample bytes. Both have zero monitor drops, queued events, positive-payload
+truncations or failures. All RAW bytes equal the original kernel completion
+payloads, positive sample completions match request order, and all positive
+sample bytes are accounted for. Measured maximum pending sample-IN depth is8
+in each phase. The identical retained readers reuse their ten previously passed
+contracts by hash; no changed reader is validated by an old test result.
+
+For the first25M capture, the four complete2048B commands differ between the
+two cohorts only in setup: its body changes only the Buffer flag at packet
+byte13 (1→0), with the corresponding CRC change at bytes41–44. All other bytes
+of setup and all pre-Stop/ARM/Stop commands are identical. Every complete2048B
+command for the following Buffer5M is identical across both cohorts, as are the
+final Stream-return commands. The first long Buffer's four commands also match
+the previous successful Windows/WCH25M control; that historical comparison is
+not a new Windows capture or platform qualification.
+
+The successful Buffer RAWs contain100,663,296 B and20,971,520 B; thus663,296 B
+and971,520 B exceed their delivered finite targets and remain preserved. Each
+Buffer also has1MiB of positive post-Stop data retained separately in its kernel
+sidecar, followed by two empty reads. No positive post-Stop bytes occur in the
+failed Buffer or either Stream return; finite RAW tails of the Stream captures
+remain preserved separately from delivered LOGIC. The passing D0/UART claims concern the
+delivered LOGIC only. For example,14 bad D0 periods occur outside the long
+Buffer's delivered target in its RAW tail; the separate post-Stop blocks also
+have waveform anomalies. Their physical time origins are not established, and
+no arbitrary all32 electrical integrity is claimed for these extra bytes.
+
+The failed short Buffer again has the exact49152-byte pattern across its whole
+4MiB RAW, already present in kernel payload. The successful Buffer prefixes do
+not have that equality. Numbered UART data still does not establish a physical
+time origin in the failed prefix; periodic bytes do not prove temporal replay,
+queue capacity or a particular firmware mechanism.
+
+Holding the preceding target at25M strengthens the observed association with
+the Stream→short-Buffer transition: the short target succeeds after Buffer and
+fails after Stream in these two cohorts. This fixed sequential comparison is
+not randomized or replicated in reverse order. Prior device state, order and
+timing remain possible confounders, and changing mode also changes the real
+acquisition, upload and cleanup behavior. It does not isolate a unique device,
+format, transport, virtualization or kernel cause. No forced long target,
+automatic priming capture or other workaround is added to the product.
+
+All1248 product-source hashes, HEAD/status/diffs and installed Linux binaries
+remain unchanged. Both fixed plans are closed; the failures and all extra data
+are retained. Windows is off and DLA/source are released. AUD-006/Buffer and the
+private AUD-025 qualification remain open; only this documentation is published.
