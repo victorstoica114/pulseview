@@ -1,5 +1,110 @@
 # Windows desktop capture and replay observations — 4 November 2026
 
+## Update: bounded physical capture with native Windows log output — 4 November 2026
+
+A new, fixed cohort completed **three physical captures, zero retries, and no
+50 MS/s attempt**: Linux25M control, actual Windows GUI25M with native output,
+then the single predefined Linux5M return. All three passed the stated bounded
+D0/D22 witness and storage/transport checks. This is one positive Windows25M
+case in this nested VM setup. It does not erase the earlier Windows25M replay,
+qualify arbitrary channel timing, or establish a universal fix or safe rate.
+
+The only planned Windows intervention was the private launcher STD output
+mechanism. The unchanged GUI705a/corebf0a ran in actual desktop Session1/PID4352,
+using the previously exercised exact C# source17d809c7. CreateProcess inherited
+only the three explicit STD handles, wrote directly to exclusive native files,
+published the live PID before waiting, and retained its original process handle
+through normal GUI exit0. No PowerShell output redirection, product change,
+installation, new product flag, flash, hub cycle, USB reset or rewiring was used.
+The preparation cohort's initial full selftest refusal and reconstructed subset
+proof remain explicit in the preceding update; this run does not convert that
+initial script into a passed full suite.
+
+| Phase | Rate / samples / LOGIC bytes | Fresh consecutive CRC packets | D0 boundary samples / bad periods |
+| --- | --- | --- | --- |
+| Linux25M | 25 MS/s / 100 M / 400,000,000 | 40, 980101–980140 | 10 / 16; zero |
+| Windows native GUI25M | 25 MS/s / 100 M / 400,000,000 | 40, 980501–980540 | 12 / 14; zero |
+| Linux5M return | 5 MS/s / 25 M / 100,000,000 | 50, 980801–980850 | 2 / 4; zero |
+
+Every phase used finite Stream, 32 channels, 1.6 V, Captures1, no hardware or
+software trigger, no continuous mode and no Stream windows. D0 is the retained
+1 MHz/50% clock: periods24–26 samples at25M and4–6 at5M satisfy the predefined
+±1-sample bound. Both independent D22 UART decoders agree with zero warnings;
+all130 numbered packets are fresh and consecutive within their own phase.
+The host source sent41/42/52 distinct live commands, respectively, all ACKed;
+commands sent outside the captured interval are not silently counted as samples.
+Three fresh preflight ACKs were observed within500ms before each Run. The same
+v8 source/PWM/camera1/SD0 and wiring were retained; MCU uptime across serial
+connections is not asserted.
+
+Independent RAW conversion matches all saved LOGIC bytes, including the actual
+Linux Segment/feed and the native Windows archive. RAW sizes are400,556,032 /
+400,556,032 /100,663,296 bytes. Passive exterior-kernel accounting preserves every
+positive byte in original order:796 /780 /224 events. Windows has401,604,608
+positive IN bytes, exactly RAW plus its retained1,048,576-byte worker-unconsumed
+sidecar. Both Linux controls account for all RAW/quiet suffixes as well. USB
+success, total length and CRC alone are not used as continuity proof; the temporal
+witnesses above are required. Firmware remains unknown.
+
+All three phases have original valid metadata, actual HEADER/END, quiet/cleanup
+and native exit0, with the source still open at confirmed END and closed only
+after postflight STATUS/ACK. Both Linux children directly observed LC_ALL=C.UTF-8;
+no decimal-comma normalization or reconstructed live END proof was needed.
+The unchanged Linux helperdb7c255b/core84c0c7da remain private diagnostic paths.
+Windows metadata is natively complete with an empty capture error. Native
+Save/Open/Save As preserves400,000,000 bytes and every archive member, including
+all metadata, exactly. The first SR/PVS hashes remain intact. A persistent file
+observer, independent of exec transport, observed the current replay HEADER,
+400 MB and END/Stopped with no hardware ARM and exit0. This is file replay only.
+
+All27 Windows originals were copied and SHA-verified before protected detach,
+normal VM shutdown and the reserved Linux return. The same original GUI process
+handle supplied exit0; its interactive task was removed. Read-only postflight
+confirms Windows off and unchanged/free DLA4-2/dev16 at5000 Mb/s and source
+CH3408134 at3-1.2/ttyUSB2. Linux is VMware; Windows is nested KVM. QEMU
+NoNewPrivs1/Seccomp2 and guest-reset=false were verified before assignment and
+detach. No simultaneous acquisition or additional agent was used.
+
+### Timing observations, with clock and causal limits
+
+Offline original-order worker/RAW/sidecar/kernel linkage covers all382 accepted
+Windows reads and the sidecar read in both25M cases. The new native-output case
+has3.979658 s inside the read wrapper and0.029847 s between calls over4.009505 s
+(0.7444% outside). The retained PowerShell-output negative has3.059941 s inside
+and5.465104 s between over8.525045 s (64.1065% outside). These are elapsed,
+clock-local intervals, not CPU use or an isolated measurement of Qt logging,
+a queue wait, mutex, SDK or scheduler cost.
+
+An independent USBmon interval sweep matches the original accounting. New
+Windows25M spans4.009037 s from ARM completion to last RAW completion, with
+0.689946 s lacking pending IN, maximum one pending IN and longest gap14.117 ms.
+The earlier negative spans8.524876 s with6.145891 s lacking pending IN. Current
+Linux controls keep pending IN throughout4.008803 /5.036490 s, maximum eight.
+Guest and exterior-kernel clocks are not synchronized; their local durations
+are not absolute timeline alignment or causal partitions. A pause threshold
+still cannot classify continuity: an earlier qualified5M case had a longer
+single pause than the earlier negative25M case.
+
+The new positive and the lower between-call time are consistent with the
+previously isolated expensive PowerShell output path. They do not establish
+that path as the sole cause of the earlier repeated131,564,544-byte interval,
+missing packets, old0B failures or other transport limits. Cohorts are sequential,
+not randomized; internal buffering/state and scheduling are uncontrolled. The
+earlier negative, source commands and all partial/refused probes remain intact.
+No firmware/memory-capacity diagnosis or product workaround follows from this
+one positive. The physical cohort is closed; further acquisition needs a new
+bounded plan, rather than reopening it for a green result.
+
+Evidence is retained privately under `artifacts/native-output-physical-20261104/`:
+fixed plan and product baseline, per-phase original metadata/END/source/USBmon,
+independent data/kernel/decoder reviews, native launch/config/runtime and file
+replay proofs, original copy manifests, shutdown/return gate, dispatch and interval
+reviews, final review and publication verification. Product HEAD/status/diffs,
+all1,248 product files and installed Linux/Windows artifacts remain unchanged;
+all408 GUI source files still match the published product source. This update
+publishes documentation only. The private launcher, captures, commercial SDK,
+firmware, VM disks and credentials are excluded; no release/rollout is qualified.
+
 ## Update: native-output launcher in the actual Windows GUI, Demo only — 4 November 2026
 
 A separate preparation cohort used the unchanged full GUI705a with native file
