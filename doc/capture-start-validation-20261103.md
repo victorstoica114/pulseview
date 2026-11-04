@@ -396,3 +396,60 @@ and installed Linux binaries remain unchanged. Both final100MB Stream returns
 pass, and DLA/source are released with Windows off. No workaround, forced long
 target, priming capture or private AUD-025 candidate is promoted. Buffer/AUD-006
 and AUD-025 qualification remain open; only this documentation is published.
+
+## Follow-up: offline UART-boundary reproduction, without changing the verdict
+
+2026-11-04 UTC. No new hardware capture is made. The completed20MB Buffer with
+its strict UART-prefix failure is analysed from its original RAW/LOGIC, D22
+projection, annotations and source records. All input hashes remain exact, and
+an offline SDK re-decode reproduces the original annotations byte for byte.
+The actual loaded core `84c0c7da`, SDK `ff037c43`, CLI and unchanged UART decoder
+source are checked. USB scanning is disabled; Windows stays off. No product,
+installed binary, decoder behavior or capture-acceptance policy changes.
+
+The first complete recognized message,835132, supplies an independent sampling
+width calibration: its184 observed transitions fit the known emitted8N1 packet
+with43.14616 samples/bit and maximum residual0.786 samples. Holding this width
+fixed, the initial69 transitions are compared with suffixes of all170 commanded
+and acknowledged source packets, fitting only their offset. There is one match:
+packet835131, with maximum residual1.000 sample. The fitted capture start is
+bit160.659 of that packet, inside the start bit of byte16 (zero-based). The
+predicted suffix ends near sample5149. The diagnostic uses an explicit2-sample
+edge bound and a±2% nominal-width interval; these are model limits, not hardware
+specifications or a relaxed version of the old acceptance rule.
+
+A known-valid synthetic8N1 waveform generated with the fitted sampling/phase
+values reproduces the exact first11 decoded bytes of the real recording:
+
+| Decoder | Initial11 bytes, hex |
+| --- | --- |
+| Simple independent decoder | `8a 6a aa 82 92 32 39 30 32 38 0a` |
+| SDK UART decoder | `a6 6a aa 82 92 32 e5 30 32 38 0a` |
+
+The synthetic input also produces two SDK frame warnings, at samples493–536
+and3297–3340, versus493–536 and3296–3339 in the real record. The second warning
+is shifted by one sample. Both decoders then recover the next complete packets
+and agree. A generated control with initial idle instead decodes identically
+without warnings. The SDK emits a data annotation before checking its stop bit;
+the simple decoder tests the stop level before accepting a byte. With a record
+starting inside a frame and no observed initial falling edge, these different
+resynchronization paths can therefore produce the observed prefix discrepancy
+without corrupting the generated waveform. This calibrated reproduction is
+not a second electrical measurement or a unique physical-cause proof.
+
+Thirteen offline contracts pass, including separate rejection of a changed
+prefix bit, missing immediate-next or interior messages, duplicates, reordering,
+bad CRC, malformed interior bytes, bad stop bit, no full calibration packet,
+stale packets and duplicated source commands. The diagnostic does not merely
+ignore everything before a later good CRC: it requires a unique initial suffix,
+a consecutive next counter and no unexplained intervening events. On retained
+real controls, it recognizes the earlier clean Buffer and rejects the4MiB
+failed Buffer, which has no complete emitted message for calibration.
+
+This is additional signal/model evidence consistent with a capture-boundary
+explanation for the completed Buffer's two differing leading bytes. Every real
+byte, warning and original outcome is retained. The original fixed plan remains
+four strict passes and two negatives; the completed Buffer is not retrospectively
+reclassified. Complete-message checks do not prove arbitrary all32 electrical
+continuity, and this analysis does not explain or repair the separate Buffer
+timeout. AUD-006/Buffer and the private AUD-025 qualification remain open.
