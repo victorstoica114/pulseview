@@ -1,5 +1,101 @@
 # Windows desktop capture and replay observations — 4 November 2026
 
+## Update: native-output launcher in the actual Windows GUI, Demo only — 4 November 2026
+
+A separate preparation cohort used the unchanged full GUI705a with native file
+output in actual desktop Session1/PID5364. **Three Demo acquisitions and zero
+physical acquisitions** exercised Stop, controller cancellation, finite END,
+native Save/Open/Save As and normal application exit. This qualifies the stated
+software observations only. Windows25MS/s continuity and AUD002/AUD006 remain
+open; the earlier negative capture and all closed physical cohorts are preserved.
+
+### Startup, retained ownership and refused controls
+
+The private launcher separates Start from Wait. It publishes the PID while the
+child is alive and retains the original CreateProcess process HANDLE, rather
+than reopening a PID later. Wait timeouts preserve that handle; live close and
+exit-code reads are refused. Only three explicitly listed standard handles are
+inherited, with exclusive new stdout/stderr files. The interactive task has no
+automatic execution-time termination. Its owner was observed alive after Demo
+END, with no exit record yet; the GUI subsequently exited0 through that same
+native handle, after file replay and normal window close.
+
+The initial property-based exit accessor failed its control: Windows PowerShell
+silently yielded null instead of catching its throwing getter. A device-free
+control independently reproduced property-catch=false/null=true and explicit-
+method-catch=true. The private accessor became an explicit GetExitCode method;
+no product code changed. Original source, refusal and partial results remain.
+
+The revised initial script reached a later refusal on the PowerShell process's
+global handle count. Its preceding guards therefore completed: fast child exit7,
+a short Wait returning false, refused live close/exit read, later exit0 of that
+same child, and matching PID/quoted/backslash/Unicode arguments and native
+standard-handle types. This is an explicitly reconstructed program-order proof,
+not a claimed full pass of that script. Its exact original counter values were
+not saved, and the cause of the global increase remains unisolated.
+
+A separate native C# block, after two warmups, performed20 failed starts with
+expected file-not-found error: handle count532 before and after. All86 output
+files from failed starts reopened exclusively. An existing-output sentinel was
+preserved. The remaining unchanged600-message logger child exited0 in22.733ms;
+its startup line and all600 timed message texts are retained. There were five
+successful selftest child starts across the original and revised phases; no
+Demo acquisition was repeated to replace a refusal. A first cleanup-probe
+compilation also refused an empty dynamic-assembly location before any child;
+the combined-source probe and that failed preparation are both retained.
+
+### Three current Demo runs and file preservation
+
+The same GUI/Session/device used32 channels at200kS/s. Each current observer was
+READY before Run and observed exactly one HEADER/END. The host controllers ran
+outside exec transport lifetime.
+
+| Demo case | Delivered and natively saved bytes | Observed behavior |
+| --- | --- | --- |
+| Explicit guarded Stop | 1,162,544 | Stop allowed after current data and matching fresh Stop image; GUI remains alive |
+| SIGTERM to the host controller | 622,172 | Signal relayed after data; controller remains through guarded Stop and END |
+| Finite100k samples | 400,000 | Natural END; late Stop refused without a click |
+
+The cancellation's first image did not match the approved Stop glyph and was
+refused. A later fresh matching image permitted Stop within the same run. No
+unverified click or additional acquisition replaced it. The two permitted Stop
+checks had FLOW ages50.573/59.887ms and screenshot RTT14.225/11.976ms. These are
+UI observation/control bounds, not atomic operations or electrical timestamps.
+
+All three native archives pass ZIP CRC, ordered chunks, expected lengths,
+32-probe/4-byte units and200kHz metadata. Demo generated no capture-status/error
+fields; their absence is preserved, not relabelled as a hardware success.
+Native Open/Save As of the first stopped archive preserves all1,162,544 payload
+bytes and every metadata member exactly. Its original archive and setup match
+the hashes taken before recapture; no implicit Session1 or orphan setup file was
+created. Total unique saved Demo data is2,184,716bytes. The replay's persistent
+observer also completed normally with a current HEADER/END.
+
+### Scope and final state
+
+GUI705a, corebf0a6c78, C++a1fc7442 and decoder628767ce module hashes are unchanged.
+The revised private launcher source is SHA256
+`17d809c772e41db85776864c8fb341a1e741ec602859697594dda86909e892d4`.
+Linux runs in VMware, Windows in nested KVM. This is a Windows-specific private
+process-launch change; Linux product code/installation is unchanged, with no
+new Linux desktop or electrical test claimed. No DLA was assigned to this boot,
+no source port was opened, and no reset, hub cycle, firmware or wiring change
+occurred. Demo software checks do not qualify real acquisition or data continuity.
+
+GUI native exit0 and task removal were verified. **All135 Windows originals
+were copied and SHA256-checked before** normal VM shutdown. The shutdown command
+returned0, then the QMP polling connection reset while the VM exited; that
+monitor did not finish successfully. A separate read-only postcheck verified
+state=null/kvm=null, DLA4-2/address16 at5000Mb/s and free DLA/source ports. No
+second shutdown or reset was used to replace that exception.
+
+All1248 product files/HEAD/status/diffs and installed programs remain unchanged.
+Only this report is published. Private launcher sources/binaries, captures,
+vendor firmware, VM disks and credentials are excluded. The original full
+selftest refusals remain explicit; no product rollout or complete suite success
+is asserted. Real DLA qualification requires a new bounded physical plan with
+fresh witnesses and independent RAW/kernel checks, retaining the old negatives.
+
 ## Update: inter-read delays and device-free logging controls — 4 November 2026
 
 The Windows25MS/s negative below remains **failed**, and its physical cohort
