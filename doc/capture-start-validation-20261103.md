@@ -453,3 +453,83 @@ four strict passes and two negatives; the completed Buffer is not retrospectivel
 reclassified. Complete-message checks do not prove arbitrary all32 electrical
 continuity, and this analysis does not explain or repair the separate Buffer
 timeout. AUD-006/Buffer and the private AUD-025 qualification remain open.
+
+## Follow-up: submit Linux Buffer sample reads after ARM
+
+2026-11-04 UTC. A private Linux-only profile tests whether sample IN requests
+pending before ARM are necessary for the short Buffer failure. It starts from
+the exact477-file source of installed core `84c0c7da`, retaining the same three
+excluded Windows-only WCH lines. Only `api.c` changes: the original submission
+loop, including ownership and rollback, is extracted unchanged; Stream keeps
+its previous position, while Linux Buffer submits its eight initial reads only
+after ARM succeeds. No delay, extra allocation, worker, runtime option or
+product default is added. The private core SHA-256 is
+`72c5f9f9360029287f4162cebca006fda272404e4d898725810a01a231fe8a35`.
+Its matching rebuilt C++ library and actual native process mappings are checked.
+
+The build has identical `config.h` and compiler flags to the retained runtime.
+All122 C checks, C++ cleanup/retry and78 frontend regressions pass. The synthetic
+ownership fixture runs53 scenarios in each of Stream and Buffer, with a normal
+second capture on the same open device:106 scenarios/212 starts. It verifies
+allocation/submit failures, ARM failure, Stop from HEADER/data/during ARM,
+cancellation races, timeout, partial bytes, cleanup and reuse with no remaining
+owners. Its ledgers measure8 initial reads before ARM in Stream and8 after ARM
+in Buffer. In particular, initial-submit failure after accepted Buffer ARM
+unwinds safely; failed ARM submits no Buffer reads. The unchanged kernel readers
+reuse their ten passed contracts by hash. These are host-contract tests, not
+an electrical or Windows qualification; no Windows binary or capture is made.
+
+A separate fixed hardware plan has seven attempts and zero retries: four with
+the private profile, then three with the installed driver. The same original
+Session/native helper is retained. The source v8/PWM1MHz50%, wires, firmware, hub
+and USB4-2/dev16/5000Mb/s stay unchanged; Linux is the outer VMware guest and
+Windows stays off. No reset, replug, priming or added transition delay is used.
+
+| Profile/capture at5MS/s/all32 | Saved LOGIC | Result |
+| --- | ---: | --- |
+| Private Stream25M | 100,000,000 B | D0 bad0;94 consecutive CRC837006–837099; decoders agree |
+| Private Buffer5M | 4,194,304 B | timeout;343 bad D0 periods; no recognized CRC; decoders disagree |
+| Private Buffer25M, Stop requested300ms after wait start | 0 B | stopped/no error; explicit cancellation and quiet cleanup, control-only |
+| Installed Stream return25M | 100,000,000 B | D0 bad0;50 consecutive CRC839001–839050; decoders agree |
+| Installed Stream25M control | 100,000,000 B | D0 bad0;94 consecutive CRC840006–840099; decoders agree |
+| Installed Buffer5M control | 4,194,304 B | timeout;257 bad D0 periods; no recognized CRC; decoders disagree |
+| Installed Stream return25M | 100,000,000 B | D0 bad0;50 consecutive CRC841001–841050; decoders agree |
+
+This is four bounded Stream-data passes, two failed Buffer-data captures and
+one successful zero-data Stop/ownership control. The empty Stop result does not
+qualify electrical integrity or reproduce a zero-byte watchdog fault. Its actual
+ARM-completion-to-Stop-submission interval is218,623µs;300ms is the host wait
+cancellation setting, not a claimed electrical timing measurement.
+
+The passive private/control parents contain520 events/260 closed URBs and
+486 events/243 closed URBs respectively, each with205,520,896 sample bytes and
+zero monitor drops, queued events, positive truncations or failures. All RAW
+matches kernel payload in original positive-completion order, also matching
+request order; every other positive sample byte is accounted for. Independent
+all32 RAW conversion matches all seven saved LOGIC files, including both actual
+partial failures and the empty Stop recording. Finite RAW tails are retained.
+Source acknowledgments and normal final source status are checked.
+
+Kernel records confirm the treatment: the private Buffer has zero initial
+sample requests before ARM completion and eight afterward, the first109µs after
+ARM completion. The installed control has all eight before ARM completion.
+The separate private Stop probe also has eight after ARM and no positive data.
+All four complete2048B commands match across the corresponding Stream, short
+Buffer and final-return phases; the Stop-only probe is a separate control.
+Actual read placement changes without changing those matched command bytes. Both failed4MiB RAWs have exact equality at a49152-byte shift
+across the whole file, already in kernel payload. This is not a minimum-period,
+physical-time-origin or queue-capacity proof.
+
+Both Buffer cases retain pending reads through the approximately3.045s interval
+between the last data and first cancellation retirement. Only85µs(private) and
+97µs(control) have no pending read after the final retirement before Stop. Moving
+the initial reads after ARM does not repair this control: pre-ARM pending sample
+INs are not necessary for this observed failure. Refactoring, startup timing,
+prior device state and lower transport/virtualization effects remain possible
+confounders; no unique device/FPGA, Buffer-format, USB or kernel cause is claimed.
+
+All1248 product-source hashes, HEAD/status/diffs and installed Linux binaries
+remain unchanged. The failed private profile is neither installed nor promoted;
+only this report is published. Both plans are closed, original failures/data
+are preserved, Windows is off and DLA/source are released. AUD-006/Buffer and
+the separate private AUD-025 qualification remain open.
