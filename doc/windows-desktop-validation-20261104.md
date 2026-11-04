@@ -1,5 +1,100 @@
 # Windows desktop capture and replay observations — 4 November 2026
 
+## Update: inter-read delays and device-free logging controls — 4 November 2026
+
+The Windows25MS/s negative below remains **failed**, and its physical cohort
+remains closed. New read-only analysis and device-free software controls identify
+a substantial cost in the laboratory's PowerShell output redirection. There is
+no new DLA acquisition, product fix, GUI installation or firmware-cause claim.
+
+### Worker and kernel intervals from unchanged originals
+
+Every positive worker read was aligned in original order by read ID, RAW offset,
+size and32-byte prefix with retained RAW/sidecar and exterior-kernel requests.
+Earlier independent whole-payload conservation remains required; matching a
+prefix alone is not that proof. The linked counts, including the unconsumed1MiB
+suffix, are383/192/192 for the three cases below. No sample bytes were altered,
+reordered or discarded. Local timing identities were recomputed independently.
+
+| Retained case | Worker read-call total | Time between worker read calls | Worker span, first start to last end |
+| --- | --- | --- | --- |
+| GUI25MS/s,400MB, failed | 3.059941s /382 accepted reads | 5.465104s /381 intervals | 8.525045s |
+| Same GUI705a finite5MS/s,200MB, passed | 9.743593s /191 reads | 0.274539s /190 intervals | 10.018132s |
+| Native API5MS/s,200MB, passed | 10.009874s /191 reads | 0.007834s /190 intervals | 10.017708s |
+
+In the negative,64.106% of that worker span is **outside** the read wrapper.
+Its median between-call interval is12.816ms, versus40us in the positive GUI case
+and the much smaller native-API total above. The wrapper brackets timeout setup,
+ReadEndP and error handling. Outside it, the worker still performs publication,
+mutex/event operations, possible queue waits and OS/VM scheduling. These are wall
+time observations, not CPU attribution or a measurement of one wait primitive.
+
+Exterior-kernel accounting for the negative has6.145891s without IN pending in
+8.524876s from ARM completion to last RAW completion, maximum one pending IN;
+Linux25MS/s maintained pending IN throughout4.008772s, maximum eight. These are
+separate clocks and extents: the6.145891s must not be directly equated to the
+5.465104s between worker calls. Clock-local sums are exact; signed worker-minus-
+kernel duration observations are retained without inventing synchronized clocks.
+The GUI5MS/s positive even has a larger maximum no-IN interval188.307ms than the
+negative152.591ms. A single longest pause is not a continuity classifier.
+Sequential cases differ in frontend/rate/extent; no failure probability or
+universal throughput limit follows from this comparison.
+
+### Reproduced redirection cost and a private correction
+
+A native C fixture calls the **exported default libsigrok log callback**600 times
+with three representative message shapes. It does not call sr_init, scan, device,
+session, WCH or acquisition APIs, and does not include Qt's additional Logging
+path. The same source ran on Linux and Windows. Windows used unchanged core
+`bf0a6c78`, Linux unchanged `84c0c7da`; DLL/source/executable hashes were recorded.
+Windows ran under SSH/Session0, not the interactive GUI's Session1.
+
+The initial six-process order on each OS was inherited stderr, direct file,
+NUL, NUL, direct file, inherited stderr. On Windows the inherited case used the
+same PowerShell Start-Process RedirectStandardError mechanism as the earlier GUI
+launcher. The child could instead reopen stderr to a file or NUL. Timed600-call
+Windows totals were2749.031/2749.778ms inherited,21.311/21.215ms direct file and
+16.198/16.592ms NUL. Linux totals were11.445/14.885ms inherited direct-file
+handles,3.357/3.387ms reopened file and0.501/0.669ms NUL. The inherited mechanisms
+differ between platforms; these figures are not an isolated OS comparison.
+
+A second, predefined Windows intervention kept the fixture binary, core,
+message arguments and inherited-stderr mode unchanged (per-run result/output
+paths were unique), and changed only the launcher/output mechanism. A private CreateProcessW launcher supplied native
+file handles with an explicit three-standard-handle inheritance list, exclusive
+new output files and the original process HANDLE for exit verification. The
+balanced order was native, PowerShell, PowerShell, native:
+
+| Native file handles | PowerShell redirection | PowerShell redirection | Native file handles |
+| --- | --- | --- | --- |
+| 24.779ms | 2729.811ms | 2713.330ms | 26.604ms |
+
+Both native totals are over101.98 times smaller than either PowerShell control.
+All600 timed message texts after the timestamp prefix are preserved exactly in
+order in every non-NUL case, including their arguments, with no callback error. The additional untimed
+loglevel-startup line is accounted separately. All16 timed fixture processes exit0;
+a separately planned fast child exit2 verifies that the native launcher does not
+turn an early nonzero exit into success. There are17 software child processes
+and **zero physical acquisitions**. Initial offline reviewer refusals assumed
+GUI generation1 and overlooked that startup line; the corrected reviewers keep
+the actual generation2 and original logs, without rerunning the refused data.
+
+This intervention demonstrates and avoids the redirection cost **in this
+fixture**. It does not measure the complete Qt GUI path, apportion the earlier
+5.465104s, prove that logging alone caused temporal replay, or qualify a new GUI
+capture. The private launcher is qualified only for these fixture paths/arguments;
+it is not installed or promoted into the closed capture cohort. Product logging,
+queues, timeouts, sample-rate settings, source and firmware are unchanged.
+
+All44 Windows evidence files were copied and SHA256-checked before normal VM
+shutdown. No DLA was assigned or source port opened in this boot. Windows is off;
+DLA/source ports are free. The1248 product files/HEAD/status/diffs and installed
+programs are unchanged. AUD002/AUD006 remain open. Any subsequent GUI/hardware
+qualification needs a new bounded plan with fresh witnesses, native Stop/END and
+independent RAW/kernel checks; the negative below must remain preserved. Private
+captures, launcher binaries, vendor firmware, VM disks and credentials are not
+included in this documentation publication.
+
 ## Update: 25 MS/s Windows continuity failure between passing Linux controls — 4 November 2026
 
 A new bounded cohort is closed at **three physical acquisitions, zero retries**.
