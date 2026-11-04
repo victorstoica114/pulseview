@@ -1,5 +1,115 @@
 # Windows desktop capture and replay observations — 4 November 2026
 
+## Update: free continuous capture, native Stop and finite restoration — 4 November 2026
+
+A new, closed cohort used **three physical acquisitions and zero retries**:
+Windows free continuous Stream with an explicit native Stop, a finite capture in
+the same GUI/Session/device, then Linux return. All three stored-data comparisons
+pass: **403,809,024 LOGIC bytes and 201 fresh consecutive CRC messages**. The Linux
+live metadata gate refused a diagnostic formatting error; its separate offline
+review and source-ownership reconstruction are described below, rather than
+reported as an initially passing live gate.
+
+The tested Windows full GUI is SHA256
+`705a2fc10aaec5859f3f398ad3468f3ca51cc3774c31fcf960c8777ec1b72b6c`,
+from the 408-file source snapshot published in `62a00c79`. Loaded core/C++/SDK/WCH
+hashes were verified. The installed programs and all product source files remain
+unchanged in this cohort. Linux runs in VMware; Windows runs in nested KVM.
+DLA `1a86:5537` stayed at USB path4-2/address16, negotiated5000Mb/s. Its firmware
+version is unknown. Source CH340 `8134` at3-1.2/ttyUSB2 reported v8, PWM1MHz/50%,
+camera1 and SD0. There was no reset, hub cycle, flash or wiring change.
+
+### Windows acquisition and evidence
+
+Actual desktop Session1/PID6216 used 32 enabled channels, 1.6V and5MS/s. Native
+Continuous sampling was enabled in Stream; hardware/software triggers and Stream
+windows were disabled. Captures-per-Run was1. Stop was permitted only after
+100,000,000 current LOGIC bytes, with a current FLOW receipt no older than150ms
+and a new image matching the approved Stop glyph. At the decision it had
+101,711,872 bytes, FLOW age5.156913ms and screenshot RTT16.997375ms. This is a GUI
+observation/control bound, not an atomic UI operation or an electrical timestamp.
+One native Stop produced one current ARM/HEADER/END, status `stopped`, no error,
+and **103,809,024 saved bytes**, equal to the entire independently converted RAW.
+D0 had no abnormal periods, with initial/final boundaries2/4samples. Two UART
+decoders agreed on51 fresh messages928101..928151, without warnings.
+
+The actual Continuous checkbox was then disabled. Its hidden finite selector
+returned and was set to50M samples at5MS/s. Without capture Open/reload/device
+change between the acquisitions, the second capture saved **200,000,000 bytes**,
+status `complete`, no error. RAW conversion matched exactly. D0 boundaries were
+4/0samples with no abnormal periods; both UART decoders agreed on100 fresh
+messages928501..928600. All four full2048-byte finite commands match the earlier
+finite50M Windows API reference; their framing and CRC were checked separately.
+The continuous setup is different and is not claimed to match that reference.
+
+Kernel conservation and original completion order pass. Continuous:
+214events/104,857,600 positive IN bytes =103,809,024 RAW +1,048,576 unconsumed
+worker sidecar bytes. Finite:398events/201,326,592 positive bytes =200,278,016 RAW
++1,048,576 sidecar. All eight full commands were independently CRC-checked.
+
+The persistent observer was READY before the source opened; each Run had three
+fresh acknowledged witness commands. The source stayed open through actual
+retirement/trace closure/END/quiet/Stopped, then status/ACK and close. The74 and102
+live commands were all acknowledged; commands after the sampled interval are
+not claimed to be captured. Source connections were separate, without an MCU
+uptime claim.
+
+Native Save after recapture asked for the new target, exercising the published
+Save-context correction on hardware. After both physical acquisitions, native
+Open and Save As of each archive preserved every payload byte and all capture
+metadata, including `stopped` versus `complete`. ZIP CRC, ordered chunks and
+member hashes passed on Windows and independently on Linux. Original archives
+and their setup files remained unchanged. An unbound shortcut was mistakenly
+used during replay; its UI effects and failed attempt were retained. Qualified
+resaves used the actual Save As menu and full comparisons. No acquisition was
+repeated. An early launcher screenshot and unsuccessful checkbox click were
+also retained; only subsequently verified native states qualified the Run.
+
+GUI native exit0, a child exit-code self-test of7 and removal of the temporary
+tasks were verified. **All58 Windows originals were copied and SHA256-checked
+before** guarded detach and normal VM shutdown. QEMU retained NoNewPrivs1,
+Seccomp2 and guest-reset=false.
+
+### Linux return and diagnostic exception
+
+The unchanged `db7c255b` native C API/actual Segment helper, with installed core
+`84c0c7da`, captured25M samples at5MS/s. This is transport/storage return evidence,
+not a Linux desktop Save test. RAW100,663,296B, feed and actual Segment preserve
+100,000,000 output bytes exactly under independent conversion. USBmon224events
+account for all positive bytes in original order. D0 has no abnormal periods,
+boundaries4/1samples; two UART decoders agree on50 fresh messages928801..928850,
+without warnings. The helper exited0 with one HEADER/END, accepted Stop, drain,
+trace closure and session/device/context cleanup.
+
+The service inherited `LC_NUMERIC=ro_RO.UTF-8` without an overriding LC_ALL.
+The helper's locale-sensitive formatter wrote four timing values with decimal
+commas, which strict JSON parsing rejected after the native process had exited.
+A device-free QCoreApplication/glib formatting control reproduces the invalid
+number in that environment and valid JSON with `LC_ALL=C.UTF-8`. The private
+launcher now sets that environment for future cohorts; this capture was not
+repeated and the native helper/product binaries were not changed.
+
+The original malformed result, exception and controller flags are retained.
+A separately labelled derived metadata view changes exactly four decimal
+separators, preserving the numeric values and every other byte; RAW/feed/Segment
+and trace inputs remain unchanged links to the originals. Backend completion is
+verified offline from those same originals. Retained controller/protocol order
+proves the serial context remained open when STOP_READY was observed after
+session/device/context closure, and unwound only at the later JSON exception.
+The exact port-close timestamp was not recorded. The initial live END parser
+and its postflight STATUS did not complete; they are not reported as passing.
+A later, separate read-only STATUS connection verified the unchanged source
+configuration and closed normally. This reconstruction is distinct from the
+direct live END/source-close measurements of the two Windows phases.
+
+The cohort is closed. Windows is off and DLA/source ports are free. These results
+qualify the stated5MS/s continuous-Stop-to-finite case and bounded D0/D22 witness
+data. They do not establish arbitrary32-channel electrical continuity, high-rate
+behavior, a firmware cause or repair for older zero-byte/gap/replay observations,
+or a complete GUI rollout. AUD002/AUD006 remain open for those scopes. No new
+product workaround or GUI installation is promoted. Private captures, diagnostic
+executables, vendor firmware, VM files and credentials are not published.
+
 ## Update: internally stopped Stream window and finite restoration
 
 A new fixed cohort is closed after three physical acquisitions, zero retries.
