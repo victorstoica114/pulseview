@@ -1,5 +1,94 @@
 # Windows desktop capture and replay observations — 4 November 2026
 
+## Update: internally stopped Stream window and finite restoration
+
+A new fixed cohort is closed after three physical acquisitions, zero retries.
+It starts from the separately verified Linux return in the preceding cohort;
+that closed cohort is not rerun. The starting evidence hash, current DLA/source
+identities, exclusive owners and negotiated 5000 Mb/s are checked before the new
+guarded Windows assignment. Firmware, source v8/PWM1MHz50%, camera1/SD0, wiring
+and hub are unchanged. Linux is in VMware; Windows is a nested KVM guest.
+
+This tests one specific route in the actual full GUI206d, interactive desktop
+Session1, PID420. Stream windows require a finite **UI** depth: the product
+then temporarily enables continuous input in the backend and restores its
+limits on exit. The UI Continuous checkbox stays off. This distinction was
+clarified before any physical capture; the original plan is retained.
+It is not a manual free-running-continuous or explicit-Stop qualification.
+
+| Phase, all at 5 MS/s | Saved data | Retained RAW | Fresh consecutive CRC messages | Kernel records |
+| --- | ---: | ---: | --- | ---: |
+| Windows, one internally stopped window | 20,000,000 B | 20,971,520 B | 926101–926110 (10) | 56 |
+| Windows, subsequent finite 50M samples | 200,000,000 B | 200,278,016 B | 926501–926600 (100) | 398 |
+| Installed Linux return, 25M samples | 100,000,000 B | 100,663,296 B | 926801–926850 (50) | 224 |
+
+The first phase selects one 5-million-sample window, D0 rising, Pre1% and
+Captures1. It stops internally when that window is complete, without a timed
+Run/Stop toggle. Its native collection contains one complete frame with no
+error, source origin1 and trigger50000 relative samples (0.01s), exactly 1%
+real pre-trigger history. At that trigger, D0 changes from low to high. All
+20 MB match the independently converted RAW slice starting at source sample1.
+Both UART decoders agree with zero warnings on all10 fresh CRC messages.
+D0 has no period outside4..6 samples; first/last-rise boundaries are2/3 samples.
+
+The second phase keeps the same GUI process, Session and DLA. No capture-file
+Open, reload, device switch or VM restart intervenes between acquisitions.
+Native Restore Session Setup disables only Stream windows in the previously
+saved setup; the normal sample selector then chooses50M at5MS/s. The software
+condition is retained but inactive without Stream windows. This qualifies that
+native setup-restoration route, not a pointer toggle of an overflow-hidden
+checkbox. Driver Continuous reads off, and all four complete2048B
+Stop/SETUP/ARM/Stop commands match the previously verified finite50M API case,
+including SHA and CRC. The stored200MB, independent RAW conversion, all100 fresh
+CRC messages and D0 pass; D0 boundaries are3/3 samples. Complete/error-empty
+metadata is preserved. The earlier window export is not overwritten.
+
+After both physical Windows acquisitions, native Open and Save As replay both
+exports. Every20MB window byte and200MB finite byte, capture metadata, frame
+order/status/error, source origin and trigger are exact. ZIP CRCs and collection
+member lengths/SHA are checked. The original native exports retain their
+original SHA; different ZIP timestamps need not produce identical containers.
+
+Passive kernel evidence accounts for every positive byte in original
+completion/submission order, without loss, truncation, sorting or repair.
+The window has20,971,520B RAW plus a separate1,048,576B worker suffix, exactly
+22,020,096B kernel data. The finite phase has200,278,016B RAW plus1,048,576B
+suffix, exactly201,326,592B kernel data. All eight complete Windows commands
+have independently verified framing/CRC. Raw surplus, source-origin prefix and
+worker suffixes remain separate from the intended saved frames; none is erased.
+The Linux return has100,663,296B RAW/kernel, exact100MB feed/actualSegment,
+50 fresh CRC messages and quiet Stop/END/cleanup. Electrical witnesses remain
+limited to D0/D22; stored32-value conversion is not an arbitrary all-channel
+continuity guarantee.
+
+Persistent current-run observers are READY before three fresh source ACKs and
+native Run. The foreground source stays owned through accepted Stop, quiet
+drain, worker retirement, trace closure, END and Stopped; post-status/ordered
+ACK checks precede serial close. Window/finite live commands are15/102; later
+ACKs beyond the saved interval are not claimed as captured messages. The GUI
+remains alive through native saves and replay, then exits normally with native
+code0 through the retained-handle reader. Its child-exit7 control also passes.
+All34 guest originals are copied and SHA-verified before normal VM shutdown;
+temporary tasks are removed. The Linux return and final DL32 identity scan
+pass. Windows is off; DLA at4-2/address4.16 and source CH3408134 at3-1.2 are free.
+
+A packaging check initially refused the already confirmed END because this
+PowerShell runtime interprets String.Split's separator as characters, not one
+literal substring. The error, script and empty output directory are retained;
+no RAW had moved. The corrected check counts escaped literal regex matches,
+and filenames use explicit suffix construction. Originals are then copied and
+verified. This is a packaging-tool correction after capture, not a product
+change, altered acceptance criterion or repeated physical acquisition.
+
+The actual GUI/runtime binaries and all1,248 local product source hashes,
+HEAD/status/diffs, installed GUI/launcher/libraries retain their baseline.
+QEMU's existing per-child reset guard and guest-reset=false remain active; no
+reset, power cycle, flash or wiring change is used. This update contains only
+the reviewed evidence report. Private captures/tools, commercial firmware,
+VM and credentials are not published. This positive5MS/s route does not repair
+or explain earlier0B cases, manual continuous/Stop failures or high-rate gaps/
+replay. AUD002/AUD006 remain open; GUI206d is not installed or promoted.
+
 ## Update: matched Windows API and interactive GUI geometry
 
 A separate fixed cohort is closed with four physical acquisitions and zero
