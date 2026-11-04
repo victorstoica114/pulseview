@@ -337,3 +337,62 @@ All1248 product-source hashes, HEAD/status/diffs and installed Linux binaries
 remain unchanged. Both fixed plans are closed; the failures and all extra data
 are retained. Windows is off and DLA/source are released. AUD-006/Buffer and the
 private AUD-025 qualification remain open; only this documentation is published.
+
+## Follow-up: reverse the cohort order and retain a strict UART-witness failure
+
+2026-11-04 UTC. A separate fixed six-capture plan reverses the preceding pair's
+order: Stream25M→Buffer5M→Stream return first, then Buffer25M→Buffer5M→Stream
+return. Each target is at5MS/s/all32. The exact previously tested native
+executables are reused without rebuilding; original Session, installed eight-IN
+driver, source v8/PWM1MHz50%, firmware, wiring, hub and USB4-2/dev16/5000Mb/s are
+unchanged. Windows stays off. Both plans close without retries, added waits,
+resets or any product change.
+
+| Reversed order/capture | Saved LOGIC | Outcome and strict witness result |
+| --- | ---: | --- |
+| First cohort, Stream25M | 100,000,000 B | complete; D0 bad0;94 consecutive CRC833006–833099; pass |
+| First cohort, Buffer5M | 4,194,304 B | timeout;172 bad D0 periods; no recognized CRC; fail |
+| First Stream return25M | 100,000,000 B | complete; D0 bad0;50 consecutive CRC834001–834050; pass |
+| Second cohort, Buffer25M | 100,000,000 B | complete; D0 bad0;94 consecutive CRC835006–835099; pass |
+| Second cohort, Buffer5M | 20,000,000 B | complete; D0 bad0;18 consecutive CRC835132–835149 agree; strict UART witness fails |
+| Second Stream return25M | 100,000,000 B | complete; D0 bad0;50 consecutive CRC836001–836050; pass |
+
+The result is four strict passes and two negatives, not five passes. For the
+completed short Buffer, both UART decoders produce515 bytes but differ at byte
+indices0 and6. The first recognized complete numbered message begins at decoded
+byte11; every subsequent decoded byte is identical. Both decoders recognize the
+same18 consecutive CRC-valid messages, with no gap, duplicate or malformed
+interior line. The independent decoder also reports two frame warnings at
+sample ranges493–536 and3296–3339. These bytes and warnings remain retained.
+The fixed acceptance required whole decoded-byte equality and no warnings, so
+this recording stays a strict witness failure. No prefix is removed and no
+criterion is relaxed retrospectively. Starting inside a UART frame is consistent
+with this localized discrepancy but is not asserted as a proven physical cause.
+
+For all six captures, independent all32 RAW conversion matches the actual saved
+LOGIC, including the timeout's partial recording. Source acknowledgments are
+complete. Two loss-free passive parents contain486 events/243 closed URBs with
+205,520,896 sample bytes, then520 events/260 closed URBs with224,395,264 sample
+bytes. Monitor drops, queued events, positive truncations and failures are zero.
+Every RAW byte equals kernel completion payload, positive completions match
+request order, all other positive bytes are accounted for, and maximum pending
+IN depth remains8 in every phase. Each capture's four complete2048B commands
+match its corresponding earlier control byte for byte. Original RAW tails and
+both1MiB post-Stop Buffer sidecars remain separate and preserved; passing witness
+claims do not qualify those extra bytes electrically.
+
+The Buffer timeout after Stream again has the exact49152-byte pattern across
+its whole4MiB RAW, already in kernel payload. Thus the acquisition outcomes
+(timeout after Stream, complete target after Buffer) persist when the prior
+cohort order is reversed. Full positive witness acceptance after Buffer is not
+replicated because of the recorded UART-prefix discrepancy. AB followed by BA
+is still a fixed sequential control, not randomized reliability qualification
+or a unique root-cause proof. Earlier device history, mode timing, upload and
+cleanup effects remain possible factors. Temporal replay, queue capacity and
+arbitrary all32 electrical continuity are not established.
+
+All1248 product-source hashes, HEAD/status/diffs, retained477-file runtime source
+and installed Linux binaries remain unchanged. Both final100MB Stream returns
+pass, and DLA/source are released with Windows off. No workaround, forced long
+target, priming capture or private AUD-025 candidate is promoted. Buffer/AUD-006
+and AUD-025 qualification remain open; only this documentation is published.
