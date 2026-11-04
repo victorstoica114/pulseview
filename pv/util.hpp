@@ -41,6 +41,10 @@ using std::vector;
 namespace pv {
 namespace util {
 
+// Replace only the capture filename's extension, keeping its directory and
+// extensionless/hidden basename intact.
+QString setup_file_path(const QString& capture_file);
+
 enum class TimeUnit {
 	None = 0,
 	Time = 1,

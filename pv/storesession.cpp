@@ -35,6 +35,7 @@
 #include <pv/devices/device.hpp>
 #include <pv/globalsettings.hpp>
 #include <pv/session.hpp>
+#include <pv/util.hpp>
 
 #include <libsigrokcxx/libsigrokcxx.hpp>
 
@@ -235,9 +236,7 @@ bool StoreSession::start()
 	bool save_with_setup = settings.value(GlobalSettings::Key_General_SaveWithSetup).toBool();
 
 	if ((output_format_->name() == "srzip") && save_with_setup && save_setup_) {
-		QString setup_file_name = QString::fromStdString(file_name_);
-		setup_file_name.truncate(setup_file_name.lastIndexOf('.'));
-		setup_file_name.append(".pvs");
+		const QString setup_file_name = util::setup_file_path(QString::fromStdString(file_name_));
 
 		QSettings settings_storage(setup_file_name, QSettings::IniFormat);
 		session_.save_setup(settings_storage);

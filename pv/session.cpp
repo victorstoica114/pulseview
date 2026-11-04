@@ -640,6 +640,7 @@ void Session::set_device(shared_ptr<devices::Device> device)
 
 	// Revert name back to default name (e.g. "Session 1") as the data is gone
 	name_ = default_name_;
+	save_path_.clear();
 	name_changed();
 
 	// Remove all stored data and reset all views
@@ -861,9 +862,7 @@ void Session::load_file(QString file_name, QString setup_file_name,
 
 	// Use the input file with .pvs extension if no setup file was given
 	if (setup_file_name.isEmpty()) {
-		setup_file_name = file_name;
-		setup_file_name.truncate(setup_file_name.lastIndexOf('.'));
-		setup_file_name.append(".pvs");
+		setup_file_name = util::setup_file_path(file_name);
 	}
 
 	if (QFileInfo::exists(setup_file_name) && QFileInfo(setup_file_name).isReadable()) {
@@ -990,6 +989,7 @@ void Session::start_capture(function<void (const QString)> error_handler)
 
 	if (hw_device) {
 		name_ = default_name_;
+		save_path_.clear();
 		name_changed();
 	}
 }

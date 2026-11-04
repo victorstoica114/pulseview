@@ -19,6 +19,7 @@
 #include <QVBoxLayout>
 #include <QFormLayout>
 #include <QFile>
+#include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonArray>
 #include <QJsonObject>
@@ -1924,6 +1925,109 @@ BOOST_AUTO_TEST_CASE(input_capture_and_failed_export_remain_usable)
 	QFile result(target);
 	BOOST_REQUIRE(result.open(QIODevice::ReadOnly));
 	BOOST_CHECK(result.readAll() == bytes);
+}
+
+
+BOOST_AUTO_TEST_CASE(replacement_capture_discards_saved_file_association)
+{
+	application();
+	auto context = sigrok::Context::create();
+	auto device = context->drivers().at("demo")->scan({
+		{sigrok::ConfigKey::NUM_LOGIC_CHANNELS, Glib::Variant<gint32>::create(32)},
+		{sigrok::ConfigKey::NUM_ANALOG_CHANNELS, Glib::Variant<gint32>::create(0)},
+	}).at(0);
+	pv::DeviceManager manager(context, "", false);
+	pv::Session session(manager, "Session 1");
+	session.set_device(std::make_shared<pv::devices::HardwareDevice>(context, device));
+	for (const auto& channel : device->channels())
+		channel->set_enabled(channel->type() == sigrok::ChannelType::LOGIC);
+	device->config_set(sigrok::ConfigKey::LIMIT_SAMPLES, Glib::Variant<guint64>::create(1000));
+	device->config_set(sigrok::ConfigKey::SAMPLERATE, Glib::Variant<guint64>::create(200000));
+	QString error;
+	session.start_capture([&](QString message) { error = message; });
+	wait_capture(session);
+	BOOST_REQUIRE(error.isEmpty());
+	QTemporaryDir directory;
+	session.set_save_path(directory.path());
+	session.set_name("previous.sr");
+
+	// A rejected start retains the previous data and its Save target.
+	for (const auto& channel : device->channels()) channel->set_enabled(false);
+	session.start_capture([&](QString message) { error = message; });
+	BOOST_CHECK(!error.isEmpty());
+	BOOST_CHECK_EQUAL(session.save_path(), directory.path());
+	BOOST_CHECK_EQUAL(session.name(), "previous.sr");
+
+	for (const auto& channel : device->channels())
+		channel->set_enabled(channel->type() == sigrok::ChannelType::LOGIC);
+	error.clear();
+	session.start_capture([&](QString message) { error = message; });
+	wait_capture(session);
+	BOOST_REQUIRE(error.isEmpty());
+	BOOST_CHECK_EQUAL(session.name(), "Session 1");
+	BOOST_CHECK(session.save_path().isEmpty());
+}
+
+BOOST_AUTO_TEST_CASE(replacement_device_discards_saved_file_association)
+{
+	Fixture f;
+	pv::DeviceManager manager(f.context, "", false);
+	pv::Session session(manager, "Session 1");
+	QTemporaryDir directory;
+	const auto raw = directory.filePath("input.bin");
+	{ QFile file(raw); BOOST_REQUIRE(file.open(QIODevice::WriteOnly)); file.write(QByteArray(256, 'Z')); }
+	session.set_save_path(directory.path());
+	session.set_name("previous.sr");
+	session.set_device(std::make_shared<pv::devices::InputFile>(f.context, raw.toStdString(),
+		f.context->input_formats().at("binary"), std::map<std::string, Glib::VariantBase>()));
+	BOOST_CHECK_EQUAL(session.name(), "Session 1");
+	BOOST_CHECK(session.save_path().isEmpty());
+	QSettings setup(directory.filePath("settings.ini"), QSettings::IniFormat);
+	session.save_settings(setup);
+	BOOST_CHECK_EQUAL(setup.value("device_type").toString(), "inputfile");
+}
+
+BOOST_AUTO_TEST_CASE(companion_setup_stays_next_to_capture_and_loads_automatically)
+{
+	Fixture f;
+	pv::DeviceManager manager(f.context, "", false);
+	pv::Session session(manager, "setup paths");
+	session.set_device(std::make_shared<TriggerSequence::SeriesDevice>(f));
+	session.start_capture([](QString) {});
+	wait_capture(session);
+	QTemporaryDir directory;
+	unsigned index = 0;
+	for (const auto& pair : std::vector<std::pair<QString, QString>>{
+		{"capture.sr", "capture.pvs"}, {"capture", "capture.pvs"},
+		{"capture.more.sr", "capture.more.pvs"}, {".hidden", ".hidden.pvs"}}) {
+		BOOST_TEST_CONTEXT(pair.first.toStdString()) {
+			const auto parent = directory.filePath(QString("parent.with.dots%1").arg(index++));
+			BOOST_REQUIRE(QDir().mkpath(parent));
+			const auto path = QDir(parent).filePath(pair.first);
+			const auto setup = QDir(parent).filePath(pair.second);
+			BOOST_REQUIRE(session.set_captures_per_run(3));
+			{
+				pv::StoreSession store(path.toStdString(), f.context->output_formats().at("srzip"), {}, {0,0}, session);
+				BOOST_REQUIRE(store.start());
+				store.wait();
+				BOOST_REQUIRE(store.error().isEmpty());
+			}
+			BOOST_CHECK(QFileInfo::exists(setup));
+			// Use a distinctive setup value so finding the data alone cannot pass.
+			pv::Session replay(manager, "replay");
+			auto view = std::make_shared<pv::views::trace::View>(replay, true);
+			replay.register_view(view);
+			auto bar = std::make_shared<pv::toolbars::MainBar>(replay, nullptr, view.get());
+			replay.set_main_bar(bar);
+			replay.load_file(path, {}, nullptr, {});
+			wait_capture(replay);
+			BOOST_CHECK_EQUAL(replay.captures_per_run(), 3);
+			BOOST_CHECK_EQUAL(replay.save_path(), parent);
+			BOOST_CHECK_EQUAL(replay.name(), pair.first);
+			replay.deregister_view(view);
+		}
+	}
+	BOOST_CHECK(!QFileInfo::exists(directory.filePath("parent.with.pvs")));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -26,6 +26,8 @@
 #include <sstream>
 
 #include <QDebug>
+#include <QDir>
+#include <QFileInfo>
 #include <QTextStream>
 
 using std::fixed;
@@ -40,6 +42,16 @@ using namespace Qt;
 
 namespace pv {
 namespace util {
+
+QString setup_file_path(const QString& capture_file)
+{
+	const QFileInfo file(capture_file);
+	QString basename = file.fileName();
+	const int extension = basename.lastIndexOf('.');
+	if (extension > 0)
+		basename.truncate(extension);
+	return file.absoluteDir().filePath(basename + ".pvs");
+}
 
 static QTextStream& operator<<(QTextStream& stream, SIPrefix prefix)
 {
