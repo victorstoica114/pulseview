@@ -1,5 +1,105 @@
 # Windows desktop capture and replay observations — 4 November 2026
 
+## Update: matched Windows API and interactive GUI geometry
+
+A separate fixed cohort is closed with four physical acquisitions and zero
+retries. It keeps the source v8/PWM1MHz50%, wiring, firmware and hub unchanged.
+Linux runs in VMware; Windows is a nested KVM guest. The DLA is
+`1a86:5537`, negotiated 5000 Mb/s at Linux path `4-2`/address `4.16`.
+The source CH3408134 remains at `3-1.2`; DTR/RTS are false. Its serial port is
+opened separately for each phase, so continuous MCU uptime is not claimed.
+
+The earlier 25-million-sample API control did not match the GUI's 50-million
+sample request. This cohort requests finite Stream, 5 MS/s, 50 million samples,
+32 channels, 1.6 V and no trigger in **both Windows paths**. Linux recovery and
+return controls each request 25 million samples at 5 MS/s. Equal requested
+geometry does not match hidden device state or establish GUI/API causality.
+
+| Phase | Actual LOGIC/storage | Retained RAW | Fresh consecutive CRC messages | Kernel records |
+| --- | ---: | ---: | --- | ---: |
+| Linux recovery | 100,000,000 B | 100,663,296 B | 924201–924250 (50) | 224 |
+| Windows native API/Segment | 200,000,000 B | 200,278,016 B | 924501–924600 (100) | 406 |
+| Windows interactive GUI | 200,000,000 B | 200,278,016 B | 924801–924900 (100) | 398 |
+| Linux return | 100,000,000 B | 100,663,296 B | 925201–925250 (50) | 224 |
+
+Every phase passes independent RAW-to-LOGIC conversion. Both API paths also
+match their delivered feed and actual Segment bytes. The actual GUI's native
+Save, Open and Save As round trip preserves all 200 MB, every ordered ZIP LOGIC
+chunk and the complete metadata/error state exactly. The archives report
+`complete`, no capture error, 32 stored channels and 5 MHz. ZIP CRCs and all
+payload lengths are checked; differing container timestamps are not data loss.
+The original export's SHA is unchanged after replay/reexport.
+
+Two independent UART decoders agree with zero warnings in every phase. The
+captured CRC ranges above are fresh, known and consecutive, not merely serial
+ACKs. D0 has no period outside 4..6 samples; initial/final rise boundaries are
+2/1, 4/3, 2/4 and 4/3 samples respectively. These electrical witnesses cover
+D0/D22 only, not arbitrary signals on every channel. The 32-value conversion
+check concerns stored data, not a general electrical continuity guarantee.
+
+Passive USB evidence is loss-free and accounts for every positive byte in
+original submission/completion order. Each Windows phase retains 200,278,016 B
+of decoder-input RAW **plus a separate 1,048,576 B worker-unconsumed suffix**,
+exactly matching all 201,326,592 positive kernel bytes. Neither suffix nor
+quantized RAW surplus is discarded or fed to the saved 200 MB recording.
+Linux's complete positive kernel payload is 100,663,296 B per phase. All four
+complete 2048 B Stop/SETUP/ARM/Stop commands have verified framing and CRC;
+the Windows API and GUI command hashes match exactly. The Linux count differs
+by design, so its SETUP is not required to match the Windows 50M request.
+
+A supplementary review initially required zero worker suffix, inherited from
+the earlier 100 MB control. The existing independent WCH accounting already
+qualified the 1 MiB suffix in original order. That additional assumption was
+rejected and the review corrected to require complete ordered conservation.
+The rejected review, its source and every original byte are retained; no
+physical acquisition was repeated. This is a review-tool correction, not a
+product fix or a change to the cohort's acceptance contract.
+
+Before hardware, the current-run GUI END guard passes 27 offline controls,
+including retained positive, zero-data-timeout and long-timeout logs plus
+missing/duplicate/stale markers and mismatched lengths. It confirms termination,
+not capture success. An actual interactive Demo run then verifies that a
+persistent SSH observer can read the live GUI log, signal READY before Run and
+observe the current HEADER/END/Stopped while the GUI stays alive. Demo has no
+physical DLA or serial source. Its native exit is independently verified as 0;
+the retained-handle exit reader also passes a child-exit-7 control.
+
+For each physical phase, three fresh source ACKs precede Run. The actual GUI
+Run is 121.420384 ms after the latest acknowledged preflight command. The
+persistent observer is already READY; no cold SSH query or timed Run/Stop
+toggle intervenes. Foreground source ownership lasts through current-run
+HEADER/ARM, accepted Stop, quiet drain, worker retirement, trace closure,
+END and Stopped. Source status/ACK checks precede serial close. The API helper
+also exits natively before source close; the GUI stays alive for Save and is
+closed normally only after native replay/reexport. The actual GUI exit is 0,
+verified through its retained native handle. No fabricated GUI-exit marker is
+used to confirm acquisition END.
+
+Source control emits 51/102/102/52 live commands, plus three preflight commands
+per phase; all have ordered ACKs. Later ACKs outside the captured interval are
+not counted as captured data. Linux API first LOGIC arrives 57.940/58.144 ms
+after ARM returns; Windows API is 58.013 ms. These are callback observations,
+not timestamps of the first electrical sample.
+
+The exact unmodified binaries are Linux helper `db7c255b`, Windows helper
+`d0ac9c4c`, Linux core `84c0c7da`, Windows core `bf0a6c78`, and actual full GUI
+`206d8584` in Victor's interactive desktop Session 1. Runtime DLL paths/hashes
+are checked before Run. This is broader evidence than a Session-0 API helper,
+but it does not qualify the continuous-to-finite transition, software-window
+controls with fresh physical counters, high rates or earlier intermittent
+zero-data captures. **AUD002/AUD006 remain open; no product correction or GUI
+installation is promoted.** The earlier failures remain unchanged.
+
+All 13 API, 14 GUI and 8 Demo guest originals are copied and SHA-verified before
+normal VM shutdown. Temporary tasks are removed; GUI/launcher/runtime hashes
+are unchanged. QEMU retains its existing per-child reset guard and
+`guest-reset=false`; no reset, power cycle, flash or rewiring is used. A real
+Linux return and final DL32 identity scan pass. Windows is off; DLA and source
+have no owners. All 1,248 local product source hashes, repository HEAD/status/
+diffs and installations retain their baseline. This update changes only this
+evidence report; captures, test tools, vendor firmware, VM and credentials stay
+private.
+
 ## Update: native API controls with source closure after confirmed END
 
 A separate plan was capped at three physical acquisitions: an installed Linux
