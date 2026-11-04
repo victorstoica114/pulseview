@@ -1,5 +1,113 @@
 # Windows desktop capture and replay observations — 4 November 2026
 
+## Update: 25 MS/s Windows continuity failure between passing Linux controls — 4 November 2026
+
+A new bounded cohort is closed at **three physical acquisitions, zero retries**.
+A Linux25MS/s control passed, the actual Windows desktop GUI at the same requested
+geometry failed temporal witnesses, and the predefined Linux5MS/s return passed.
+The planned Windows50MS/s phase was cancelled at the first failure. This is a
+negative qualification result, with no product fix, workaround or installation.
+
+| Phase | Requested samples/rate | Saved LOGIC bytes | Electrical witness result |
+| --- | --- | --- | --- |
+| Linux control | 100M /25MS/s | 400,000,000 | Pass:40 fresh consecutive CRC messages, D0 no abnormal periods |
+| Windows GUI | 100M /25MS/s | 400,000,000 | **Fail:** missing/repeated CRC messages and6 abnormal D0 periods |
+| Windows faster phase | 100M /50MS/s | Not acquired | Cancelled; no retry |
+| Linux return | 25M /5MS/s | 100,000,000 | Pass:50 fresh consecutive CRC messages, D0 no abnormal periods |
+
+### Configuration, identity and ownership
+
+All acquired phases used finite Stream,32 enabled channels,1.6V, no hardware or
+software trigger, no Stream windows and one capture per Run. Linux is in VMware;
+Windows is in nested KVM. The same DLA `1a86:5537` stayed at USB4-2/address16,
+negotiated5000Mb/s; its firmware version is unknown. The unchanged CH340 source
+`8134` at3-1.2/ttyUSB2 reported v8/PWM1MHz/50%/camera1/SD0. There was no reset,
+hub cycle, flash or wiring change. Source connections were separate; continuous
+MCU uptime is not claimed.
+
+Windows actual desktop Session1/PID1400 loaded GUI SHA256
+`705a2fc10aaec5859f3f398ad3468f3ca51cc3774c31fcf960c8777ec1b72b6c`,
+whose408-file source snapshot is published in `62a00c79`. Core/C++/decoder/WCH
+module hashes match the preceding qualified5MS/s cohort. QEMU NoNewPrivs1,
+Seccomp2 and guest-reset=false were checked before assignment. Native options,
+finite100M/25MHz selectors and trigger-off state were inspected; the saved setup
+independently confirms32 enabled channels, trigger/windows off and captures1.
+All four full2048-byte commands match the Linux25MS/s control exactly; Windows
+command framing and CRC were checked separately. These sequential controls use
+different frontends/transports and do not isolate an OS, scheduling or firmware
+cause, or estimate a failure rate.
+
+Passive USB monitoring and the current GUI observer were ready before Run.
+Three fresh source ACKs preceded each Run by at most500ms. Every capture retained
+the source through actual backend END/quiet/trace closure and cleanup, then
+postflight STATUS/ACK and source close; each live end guard passed directly.
+The GUI remained alive after the Windows END. A missing private Python dependency
+stopped an initial controller import before any source open or native Run; that
+failure and the unchanged dependency correction are retained. It was not a
+physical acquisition or a retry of one.
+
+### The Windows negative is in the retained input
+
+Native metadata reports `complete`, no error, and exactly400,000,000 LOGIC bytes.
+An independent implementation converts the original400,556,032-byte RAW prefix
+to the saved LOGIC exactly. Kernel accounting preserves original request and
+completion order:780events,401,604,608 positive IN bytes =400,556,032 RAW
++1,048,576 unconsumed worker-sidecar bytes. No bytes were reordered, silently
+discarded or repaired.
+
+Both UART decoders agree, without warnings, on40 CRC-valid packet occurrences.
+Counters930514..930526 are absent;930528..930540 appear twice. The host sent each
+fresh counter once and all42 live commands were acknowledged. D0 has6 periods
+outside25+/-1samples. Their starting samples are30947310,30947328,31088640,
+31209452,31209472 and67108851, with periods18,16,16,20,14 and16samples.
+The initial/final rising-edge boundaries are10/20samples.
+
+More specifically, original RAW ranges `[134217728,265782272)` and
+`[268435456,400000000)` are **byte-for-byte identical over131,564,544bytes**,
+at a distance of128MiB. Thirteen complete repeated numbered CRC packets have
+identical positions relative to those ranges. This supports temporal replay in
+the retained input, beyond similarity of a periodic clock alone. The independently
+matched kernel stream already contains these bytes, before guest conversion,
+GUI storage and Save. It does not establish device memory capacity or identify
+the responsible firmware, USB hardware, host stack or virtualization component.
+A correct byte count, valid CRCs and clean END are insufficient continuity proof.
+
+### Linux controls, replay and final state
+
+Linux used the unchanged native C API/actual Segment helper `db7c255b` with
+installed core `84c0c7da`. At25MS/s, RAW400,556,032B, feed and actual Segment
+preserve400,000,000 output bytes exactly;796USBmon events account for all bytes
+in original order. Both decoders agree on930101..930140, no warnings; D0 periods
+24..26, boundaries5/20samples. The5MS/s return preserves100,000,000B from
+RAW100,663,296B,224events; counters931101..931150, D0 boundaries4/1samples,
+no abnormal periods. The original JSON is valid in both runs: child environments
+explicitly set `LC_ALL=C.UTF-8` despite inherited Romanian `LC_NUMERIC`.
+Native exits, one HEADER/END, cleanup and source-close ordering pass directly;
+no decimal normalization or ownership reconstruction was needed in this cohort.
+
+Native Windows Save/Open/Save As preserved all400,000,000 bytes and every archive
+metadata member, including the original `complete` status and its continuity
+failure. Original archive/setup files are unchanged. The auxiliary host/guest
+replay observer was interrupted by exec transport after4MiB (host exit143).
+That partial observer and a sharing-mode read refusal are retained, not reported
+as a passing live replay gate. Its original prefix matches the full GUI log at
+the exact235806-byte READY offset. The full original log subsequently proves
+one file HEADER/END/Stopped and400MB, with no hardware ARM; complete native
+Save As equality independently confirms payload/metadata preservation. No Open
+or acquisition was repeated to replace the failed observer record.
+
+GUI native exit0 and the exit-code7 self-test passed. **All26 Windows originals
+were copied and SHA256-verified before** guarded detach and normal VM shutdown.
+The reserved Linux return began only after those checks and fresh free-port,
+identity and speed checks. Windows is now off, DLA/source ports are free, all1248
+product source files/HEAD/status/diffs and installed programs remain unchanged.
+
+The report qualifies these bounded Linux controls and preserves the Windows
+negative. Electrical witnesses cover D0/D22 only. It does not qualify arbitrary
+32-channel continuity, the cancelled50MS/s case, or Windows25MS/s operation.
+AUD002/AUD006 and older zero-byte/gap/replay observations remain open. Private
+captures, vendor firmware, VM disks and credentials are excluded from publication.
+
 ## Update: free continuous capture, native Stop and finite restoration — 4 November 2026
 
 A new, closed cohort used **three physical acquisitions and zero retries**:
