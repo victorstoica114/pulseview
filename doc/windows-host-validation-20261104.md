@@ -1,8 +1,8 @@
-# Windows host-side storage and file-recovery validation
+# Windows host validation: storage, imports and export recovery
 
-4 November2026. This qualifies the specific host-memory and file-load contracts
-below for the current frontend sources. No application source, GUI executable,
-library or installed launcher changes. User-desktop acquisition at5/50MS/s remains
+4 November 2026. This qualifies the specific host-memory, file-load and export
+contracts below for the current frontend sources. No application source, GUI
+executable, library or installed launcher changes. User-desktop acquisition at5/50MS/s remains
 pending under AUD002; no physical acquisition was performed in this work unit.
 The combined Windows frontend is not newly installed or declared fully qualified.
 
@@ -99,19 +99,74 @@ Diagnostic executable identities:
 - Linux current: `e4fafe9d6ddca92125e2a3fa71789e1fbceb1874e852c4d0fe963e526568fd12`.
 - Windows current: `30b78651fd636549b420ff17fced33668f00213a9a42b22470ebbb1fc8594fbd`.
 
+## AUD023: export worker creation failure
+
+The existing correction also passes fresh host tests on Windows. The retained
+original StoreSession is independently rejected on Linux and Windows: six of
+14 export fault/control cases let the thread-creation exception escape. Three
+actual StoreProgress calls, for binary, srzip and collection export, also let
+that exception escape on each OS. Those negatives and their partial files are
+retained; no application crash is inferred from the caught diagnostic exception.
+
+The public [14-case contract](../contrib/check-store-thread.cpp) is reused with
+its assertions unchanged. It covers 2,048 and 2,621,441 samples, binary/srzip,
+collection parent and nested child creation, error propagation, no success on
+failure, exact retained source bytes and a fresh export/replay. Each armed fault
+makes exactly one selected pthread_create return EAGAIN, without exhausting the
+machine. The Windows adaptation redirects the libstdc++ import only inside the
+diagnostic process; its original pointer and page protection are checked as
+restored when every Windows diagnostic exits. The Linux adapter remains local
+to the diagnostic executable. No fault hook is linked into PulseView.
+
+All 14 contracts and three real StoreProgress error/recovery dialogs pass in
+each of four configurations:
+
+| Configuration | Export fault/control | Error dialog and fresh export |
+|---|---:|---:|
+| Linux X11, current full GUI objects | 14 pass | 3 pass |
+| Windows native Qt, current frontend objects | 14 pass | 3 pass |
+| Windows offscreen, same current frontend objects | 14 pass | 3 pass |
+| Windows native Qt, actual GUI StoreSession/StoreProgress objects | 14 pass | 3 pass |
+
+These are 14 plus three unique contracts repeated across configurations. An
+independent Python reader verifies all 24 ordinary control exports and 12 dialog
+recovery exports byte for byte. ZIP CRCs, declared chunk order, collection member
+hashes, sample counts, channel count, rate, unknown outcomes/timing and empty
+trigger lists remain exact. Failed outputs are kept and are not reclassified as
+successful exports.
+
+Recompiling StoreSession and StoreProgress with their recorded GUI flags produces
+objects byte-identical to the ones used by the unchanged Windows GUI 206d8584.
+Those actual objects are linked into the fourth diagnostic configuration. Their
+SHA-256 values are
+`c39b36a4a4df9b790ce785d9a615e83665854685a0fb74833219a73ac70a731d`
+and `0e18338e24561ffb682cd04ff3f20755071af1be817abdcf01eda4cd999d624c`.
+StoreSession source SHA-256 is
+`5b1423101aa3db0b4ff526368f01b458c2e4800287b8866cfffd5e80aba590a9`.
+The GUI itself, its objects, loaded DLLs and both platform installations remain unchanged. Current application sources match the tested snapshot; the
+78-case suites on four Qt configurations are reused by source identity.
+
+Native dialogs run in the diagnostic's test session, including under Windows
+SSH. This does not qualify the user's interactive desktop acquisition workflow.
+Recovery uses a fresh StoreSession on the same captured Session; repeated start
+on the same exporter and machine-wide OOM recovery are not promised. Ordinary
+exports gain no new atomic-replacement guarantee. No new correction or physical
+capture was needed for these already-correct host paths.
+
 ## Remaining scope
 
-These results complete the Windows software checks for the named storage and
-file-recovery contracts. Hardware is excepted for this host-only follow-up:
-application acquisition code and executables are unchanged, and no new physical
+These results complete the Windows software checks for the named storage,
+file-recovery and export-start contracts. Hardware is excepted for this host-only
+follow-up: application acquisition code and executables are unchanged, and no new physical
 or electrical claim is made. Previous bounded physical captures and their
 failures retain their original verdicts. In particular, the Linux Buffer timeout/
 corrupted D0/UART recording remains a failure, and broad GUI/high-rate transport
 qualification remains open. No reset, automatic retry or transport workaround
 was introduced.
 
-Local evidence: `artifacts/windows-segment-qualification-20261104/` and
-`artifacts/windows-collection-qualification-20261104/`, including source/fixture
+Local evidence: `artifacts/windows-segment-qualification-20261104/`,
+`artifacts/windows-collection-qualification-20261104/`, and
+`artifacts/windows-export-qualification-20261104/`, including source/fixture
 hashes, compiler/link commands, original negative programs, stdout/stderr,
 module mappings, object identity and qualification manifests. Private desktop,
 VM images, authentication and commercial firmware are not publication inputs.
