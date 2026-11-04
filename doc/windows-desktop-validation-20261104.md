@@ -1,5 +1,97 @@
 # Windows desktop capture and replay observations — 4 November 2026
 
+## Update: finite first-data deadline experiment
+
+A separate Linux-only diagnostic tested whether a finite Stream acquisition can
+legitimately deliver its first data after the existing three-second deadline.
+A review of seven retained starts found that the failing 5 MS/s finite requests
+encoded five or ten seconds while timing out at about three seconds. However,
+identical finite setups had also delivered data promptly, and a 20 MS/s failure
+encoded only 1.25 seconds. These observations motivate a test, not a universal
+mode, firmware or transport explanation.
+
+Only a private copy of `api.c` changed: finite Stream first-data allowance became
+the requested duration plus the existing three-second margin, under a Linux-only
+guard. Continuous operation, Buffer, later stall handling, command fields and
+ownership were unchanged. The 477-file runtime snapshot, configuration, build,
+make check and private install were verified. Four synthetic processes covered
+eight attempts, including recovery on the same open device: delayed first data,
+no data and a stall after partial data. The synthetic delayed-first case shows
+that the changed deadline has the intended effect; it is not hardware evidence.
+
+The physical plan was capped at three captures, zero retries, with a fresh source
+preflight before each start. All three completed:
+
+| Linux 5 MS/s control | Independent result | First data after logged ARM |
+| --- | --- | --- |
+| Installed runtime, continuous host-count Stop | 100,663,296 bytes | 58.198 ms |
+| Private runtime, finite 25 million samples | 100,000,000 bytes | 58.118 ms |
+| Installed runtime, finite 25 million samples | 100,000,000 bytes | 58.302 ms |
+
+Each passed RAW-to-feed-to-actual-Segment comparison, all 50 fresh CRC packets
+in order with two UART decoders, D0 periods of four to six samples, loss-free
+kernel request/completion ordering and byte conservation, Stop, drain, END and
+resource closure. Electrical witnesses remain limited to D0 and D22. Linux ran
+in VMware on the unchanged USB3 path; no reset, hub cycle, firmware or wiring
+change was made. This private diagnostic did not modify or run Windows code.
+
+**The additional deadline was never used in any physical capture. The experiment
+does not support promoting a longer timeout.** Immediate success with both
+private and installed runtimes does not explain the earlier zero-byte failures.
+The private runtime was not installed in the normal launcher or published.
+
+## Update: Windows continuous-to-finite cohort stopped after a timing failure
+
+A new, separate plan allowed a native continuous GUI capture followed by a finite
+capture in the same device session, then an installed Linux return control. Each
+later phase required the previous phase to pass. Only the first physical
+acquisition started; no retry or remaining phase was run.
+
+The actual Windows GUI and runtime hashes are the same as those recorded below.
+It used Stream, 5 MS/s, continuous sampling, all 32 channels, threshold 1.6 V,
+software windows disabled and no hardware trigger. Windows ran in nested KVM,
+with exclusive DLA ownership, the reset guard and `guest-reset=false`. The source
+preflight passed three fresh ACKs from a live producer; the first 50 commands
+892201–892250 were acknowledged.
+
+The laboratory controller was supposed to request native Stop at six to eight
+seconds. Its remote flow query took 2.964 seconds, exceeding its 1.5-second guard,
+so it skipped the toggle. It then wrongly exited successfully and closed its
+source connection after about 13 seconds without confirming acquisition END.
+The later manual Stop request was 129.035 seconds after the Run request. Driver
+logs show a sample-transfer timeout before backend Stop, two empty drain reads,
+worker retirement and END. The source process was not kept alive throughout the
+unplanned long acquisition. This is a failed laboratory timing/control attempt,
+not a successful transition test or evidence of a product fix. The cause of the
+later data stall is not isolated.
+
+The original 2,478,833,664 RAW bytes (619,708,416 samples), zero-byte unconsumed
+sidecar and logs were retained. Native Save finished after the error and wrote
+an archive containing 591 ordered LOGIC chunks. Its 2,478,833,664 decoded bytes
+match an independent RAW bit-plane conversion on all 32 channels, byte for byte;
+ZIP CRCs, lengths and original guest-to-host SHA256 hashes passed. The archive
+retains `capture status=timeout` and the actual `Capture incomplete` error.
+Storage preservation does not make the acquisition complete. No GUI replay of
+this large partial archive is claimed.
+
+D0 has 123,945,656 rising-edge periods, all four to six samples, with only four
+samples before the first rise and one after the last. Two independent UART
+decoders agree on 1,407 bytes, including all 50 fresh CRC packets in order,
+without decoder warnings. Those packets witness the initial commanded interval;
+they do not establish source-owner liveness or arbitrary all-channel continuity
+through the entire unplanned long run.
+
+The GUI then closed with native process exit code zero. The exit-handle wrapper
+had first checked an independent process exiting with code seven, avoiding the
+old missing/nullable exit-code record. The temporary task was removed. All 11
+original files were copied and hash-verified before normal VM shutdown. A final
+non-acquiring identification check found the same DLA address 4.16 / 5000 Mb/s;
+USB and serial owners were absent. Both installed launchers and all 1,248 local
+source hashes, HEADs and dirty differences remained unchanged. The GUI candidate
+remains uninstalled; the first-data/replay and broader Windows qualification
+issues remain open. Only this report is published; raw data, desktop and VM
+material remain private.
+
 ## Update: controlled UART witness cohort
 
 A separate, fixed two-acquisition cohort addressed the demonstrated source
