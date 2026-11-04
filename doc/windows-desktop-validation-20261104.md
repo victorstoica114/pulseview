@@ -1,5 +1,101 @@
 # Windows desktop capture and replay observations — 4 November 2026
 
+## Update: offline128MiB overlap localization in the native50M negative — 4 November 2026
+
+A fixed offline follow-up finds a **smaller exact RAW equality interval** in the
+preceding native-output Windows50M negative. The earlier comparison correctly
+rejected equality of the whole old131,564,544-byte range; it did not exclude a
+shorter matching interval. This review adds zero physical captures, VM boots,
+source/USB I/O or product changes. Both physical cohorts remain closed.
+
+The plan scans the complete original positive RAW streams at exactly128MiB
+displacement, retaining every maximal32-byte-frame-aligned equality run of at
+least1MiB. It fixes four cases before execution: native50M negative, native25M
+positive, old PowerShell25M negative and the Linux50M positive control. Existing
+worker-unconsumed sidecars are virtual read-only extensions, never appended to
+accepted LOGIC. Full-range independent SHA digests verify every retained pair.
+
+| Retained case | Exact RAW+sidecar equality run | Portion with both ranges inside accepted LOGIC | Repeated numbered CRC pairs |
+| --- | --- | --- | --- |
+| Windows50M native, negative | 10,428,416 bytes | 8,823,808 bytes | zero |
+| Windows25M native, qualified | no run≥1MiB | none | none at this displacement |
+| Windows25M PowerShell, negative | 133,169,152 bytes | 131,564,544 bytes | 13 |
+| Linux50M control, qualified | no run≥1MiB | none | none at this displacement |
+
+The native50M pair is precisely:
+
+```text
+first  RAW [256958464,267386880)
+second RAW [391176192,401604608)
+distance   134217728 bytes
+length      10428416 bytes
+```
+
+Each full range has SHA256
+`d4098a84a768769170a7d2a2a94947b67f3370bbd92b0054f742b3a66c99d7b0`.
+The first range's aligned start lies inside the independently derived RAW bracket
+[256958368,256958560) of the first D0 anomaly at sample64,239,597/period35.
+The preceding32-byte comparison differs;29 trailing bytes of that preceding
+frame also match. The retained aligned run continues to the end of the available
+positive kernel stream on its second side, so this review does not establish
+where a longer underlying match might end.
+
+Exactly8,823,808 bytes of the equality have both sides inside accepted LOGIC.
+The remaining
+1,604,608 bytes on the second side are556,032 fetched RAW bytes beyond the finite
+LOGIC limit plus the original1,048,576-byte worker-unconsumed sidecar. They remain
+quarantined original evidence. No samples were padded, appended, reordered or
+promoted into the saved400MB. The old25M pair similarly extends to133,169,152 RAW
+bytes only when including these retained suffixes; its accepted LOGIC overlap
+remains the previously reported131,564,544 bytes.
+
+A separate standard-library verifier parses every original USBmon submission/
+completion in order, accounts for401,604,608 positive IN bytes in each Windows
+case and400,556,032 in Linux50M, and hashes the selected ranges directly from
+completion payloads. Those digests equal the RAW pair digests. Thus the equality
+already exists in exterior Linux kernel data, including the retained sidecar;
+it is not introduced by archive replay or concatenating a derived LOGIC file.
+Original captures, annotations, reviews and kernel files retain their hashes.
+
+### Equality, temporal support and remaining uncertainty
+
+The old25M pair contains13 complete numbered messages930528–930540 on each side,
+with exact corresponding data-bit positions33554432 samples apart. The host issued each of those numbered source commands once, with ACKs. The
+paired identifiers supply temporal support in addition to whole-range equality;
+host commands/ACKs alone do not measure the number of electrical emissions.
+
+The new50M pair contains **no complete numbered UART message on either side**
+within the accepted annotation coverage. Its equality and D0 boundary relation
+are verified, but it lacks that repeated-identifier proof. The existing50M
+failure remains independently established by absent990514 and D0 periods35/66;
+no new confidence in arbitrary channel timing follows. Sidecar beyond accepted
+LOGIC has no archive UART annotation witness in this review.
+
+The Linux50M positive has289,901 matching individual32-byte frames at the same
+displacement, all isolated single-frame runs, while the native25M positive has
+zero matching full frames. This illustrates why matching periodic/idle data
+alone is not a universal continuity detector. The1MiB cutoff is the predeclared
+offline reporting threshold, not a new product flag, corruption classifier or
+safe-rate rule. No arbitrary displacement was searched to manufacture a match.
+
+These results localize a partial equality interval already in kernel data; they
+do not distinguish device/bridge/SDK/VMware/KVM/source behavior, identify memory
+capacity, prove the direction or cause of a copy, or certify every matched
+sample's true time. The two stored ranges have an order; that is not a measured
+physical copy direction. A future bounded probe seeking stronger temporal
+support would need denser unique witnesses after qualifying the source cadence,
+rather than assuming100ms-spaced messages identify a shorter suspect interval.
+This audit starts no such capture and changes no firmware, buffer or logger.
+
+Evidence is retained under `artifacts/raw-overlap-review-20261104/`: fixed plan,
+original input hashes, every retained run and boundary, paired-message coverage,
+independent kernel plan/parser/digest proofs, product baseline, final review and
+publication verification. All1,248 product files, HEAD/status/diffs and installed
+artifacts remain unchanged. Windows remains off with the DLA4-2/dev16/5000 and
+source CH3408134/3-1.2/ttyUSB2 free. This update publishes documentation only;
+Windows50M and release qualification remain false. Private captures, SDK/firmware,
+VM disks and credentials are excluded.
+
 ## Update: native-output Windows50M continuity failure between Linux controls — 4 November 2026
 
 A separate fixed cohort completed **three physical captures and zero retries**:
