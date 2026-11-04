@@ -964,32 +964,9 @@ void Session::start_capture(function<void (const QString)> error_handler)
 		try { prepare_stream_windows(); }
 		catch (const std::exception& error) { error_handler(QString::fromUtf8(error.what())); return; }
 	}
-	// Outcome and samples describe the same acquisition. A rejected start
-	// must preserve both until a new acquisition replaces them.
-	{
-		lock_guard<recursive_mutex> lock(data_mutex_);
-		capture_outcome_.clear();
-		capture_error_.clear();
-	}
-	// Clear signal data
-	for (const shared_ptr<data::SignalData>& d : all_signal_data_)
-		d->clear();
 
-	trigger_list_.clear();
-	segment_sample_count_.clear();
-	segment_outcomes_.clear();
-	segment_origins_.clear();
 
-	// Revert name back to default name (e.g. "Session 1") for real devices
-	// as the (possibly saved) data is gone. File devices keep their name.
-	shared_ptr<devices::HardwareDevice> hw_device =
-		dynamic_pointer_cast< devices::HardwareDevice >(device_);
-
-	if (hw_device) {
-		name_ = default_name_;
-		name_changed();
-	}
-
+	const auto previous_start_time = acq_start_time_;
 	acq_start_time_ = Glib::DateTime::create_now_local();
 
 	// Publish startup before the worker starts: Stop must also cancel a start
@@ -1000,8 +977,20 @@ void Session::start_capture(function<void (const QString)> error_handler)
 	try {
 		sampling_thread_ = std::thread(&Session::sample_thread_proc, this, error_handler);
 	} catch (const std::exception& error) {
+		acq_start_time_ = previous_start_time;
 		set_capture_state(Stopped);
 		error_handler(QString::fromUtf8(error.what()));
+		return;
+	}
+
+	// Revert name back to default name (e.g. "Session 1") for real devices
+	// as the (possibly saved) data is gone. File devices keep their name.
+	shared_ptr<devices::HardwareDevice> hw_device =
+		dynamic_pointer_cast< devices::HardwareDevice >(device_);
+
+	if (hw_device) {
+		name_ = default_name_;
+		name_changed();
 	}
 }
 
@@ -1497,6 +1486,20 @@ void Session::sample_thread_proc(function<void (const QString)> error_handler)
 try
 {
 	assert(error_handler);
+
+	// Replace the previous acquisition only after this worker exists. If
+	// thread construction fails, its samples and metadata remain available.
+	{
+		lock_guard<recursive_mutex> lock(data_mutex_);
+		capture_outcome_.clear();
+		capture_error_.clear();
+		for (const shared_ptr<data::SignalData>& d : all_signal_data_)
+			d->clear();
+		trigger_list_.clear();
+		segment_sample_count_.clear();
+		segment_outcomes_.clear();
+		segment_origins_.clear();
+	}
 
 #ifdef ENABLE_FLOW
 	pipeline_ = Pipeline::create();
