@@ -169,3 +169,87 @@ does not identify the physical times or acquisition from which bytes originated.
 No queue capacity, universal deadline, native physical-Linux qualification or
 arbitrary all32 electrical integrity is inferred. No source correction is
 promoted; AUD-006/Buffer and the private AUD-025 qualification remain open.
+
+## Follow-up: one pending IN and omission of the early-stopped capture
+
+2026-11-04 UTC. Two fixed Linux-only controls test separate explanations for
+this short Buffer failure. They retain the original Session, the same source
+v8/PWM1MHz50% and wires, and USB4-2/dev16/5000Mb/s. Linux is the outer VMware
+guest; Windows stays off. There is no hub toggle, reset, firmware operation,
+added transition delay or successful retry replacing a failure.
+
+First, a private driver copy changes only `NUM_TRANSFERS` from8 to1 relative to
+the retained 477-file source of installed core `84c0c7da`. It inherits the same
+three excluded Windows-only WCH lines; these are not promoted. Compiler flags
+and `config.h` match the original build. The private core is SHA-256
+`9e059c98ae0e183b8f52bb05e7363dd2c998b8df7872ba3fafc16bdfdbdd531f`.
+Actual native process mappings select it and its matching C++ library. All122 C
+checks, the C++ cleanup/retry check,78 existing frontend regressions and10 reader
+contracts pass. This is a private Linux experiment, not a shared-code fix or a
+Windows release qualification.
+
+The first fixed cohort repeats the original Stream → early Stop → Buffer
+sequence with that private driver, followed by a Stream return with installed
+core `84c0c7da`: four captures, zero retries. The second cohort retains installed
+core `84c0c7da` throughout and changes only the private fixture loop to omit the
+explicitly early-stopped acquisition: complete Stream → Buffer, then Stream
+return. Its original Session and every other frontend object are retained.
+This is three captures, zero retries. Normal USB retirements at finite capture
+completion still occur; the second control does not remove all USB cancellation.
+
+| Control, 5 MS/s/all32 | Saved LOGIC | Outcome and bounded witnesses |
+| --- | ---: | --- |
+| One-IN Stream, 5M target | 20,000,000 B | complete; D0 bad0; CRC825006–825023 |
+| One-IN Stream, 25M target, Stop300ms | 3,145,728 B | stopped; D0 bad0; CRC825029–825031 |
+| One-IN Buffer, 5M target | 4,194,304 B | timeout;172 bad D0 periods; no recognized CRC message |
+| Installed-eight-IN Stream return, 25M target | 100,000,000 B | complete; D0 bad0; CRC826001–826050 |
+| No-early-stop Stream, 5M target | 20,000,000 B | complete; D0 bad0; CRC827006–827024 |
+| No-early-stop Buffer, 5M target | 4,194,304 B | timeout;172 bad D0 periods; no recognized CRC message |
+| Installed-eight-IN Stream return, 25M target | 100,000,000 B | complete; D0 bad0; CRC828001–828050 |
+
+Two independent UART decoders agree on every passing row's consecutive CRC
+messages; they disagree on the failed Buffer rows. Independent all32 RAW
+conversion matches all seven actual saved LOGIC payloads, including both partial
+failures. Source acknowledgments, finite RAW tails and original failure metadata
+are retained. No data is repaired, cropped into success or reordered.
+
+The passive traces record328 events/164 closed URBs with128,974,848 sample bytes
+for the one-IN cohort, and334 events/167 closed URBs with125,829,120 sample bytes
+for the no-early-stop cohort. Both have zero monitor drops, queued events,
+positive-payload truncations or monitor failures. Every saved RAW byte equals its
+kernel payload; positive sample completions are in submission order. All other
+sample bytes are accounted for. Each capture's four complete2048B commands
+(pre-Stop, setup, ARM and Stop) are byte-identical to the matching preceding
+eight-IN reference. This comparison does not constitute hardware readback.
+
+The observed maximum pending sample-IN depths are1/1/1/8 and8/8/8 respectively.
+With one IN, the four Buffer data requests are sequential, the next submitted
+after the preceding completion. The identical first/fourth1MiB relation remains
+in their kernel payloads. Multiple concurrently pending sample INs in this Linux
+guest are therefore not necessary for this observed failure. Lowering the
+transfer count does not repair it. The macro also changes private allocations
+and timing; this sequential comparison is not a randomized reliability estimate.
+The failure without the early-stopped acquisition likewise shows that preceding
+early stop is not necessary. Ordinary finite-completion cleanup remains present.
+
+Offline comparison of the three retained4MiB Buffer RAWs (preceding eight-IN,
+new one-IN and new no-early-stop controls) finds exact equality at a49152-byte
+shift over each whole file: `RAW[:-49152] == RAW[49152:]`. Each RAW is already
+bound byte for byte to its kernel trace. Thus the previously reported3MiB
+first/fourth-block equality is consistent with a shorter48KiB pattern:3MiB is
+64 times48KiB. This does not prove the minimum period, a3MiB buffer, physical
+temporal replay or the originating acquisition. No numbered UART message in
+these bad prefixes establishes that time origin. The all-file RAW hashes are:
+
+- Eight-IN reference: `7f1a90de981502631122059e91ccd9ba44dd9929ccb98e41a48a66ff6e45115b`.
+- One-IN: `7210cb35c561e84fbfda73e79e90366b4c3bb7ecab983de77068ed5bbdd0e857`.
+- No early stop: `3727e7a5ac00ed2aecf79b1982f809c65df7c75afa5e4051068b428658a8aca4`.
+
+These controls narrow the explanations without identifying a device/FPGA,
+Buffer-format, USB, virtualization or host-kernel cause. They do not demonstrate
+arbitrary all32 electrical continuity or resolve the separate zero-byte cases.
+All1248 product-source files, their HEAD/status/diffs and installed Linux binaries
+remain unchanged. Only this validation document is published; the one-IN driver
+and AUD-025 candidate remain private. Both cohorts finish with a verified100MB
+Stream return and released DLA/source. Buffer/AUD-006 and AUD-025 qualification
+remain open.
