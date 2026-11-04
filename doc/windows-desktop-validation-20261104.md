@@ -1,5 +1,116 @@
 # Windows desktop capture and replay observations — 4 November 2026
 
+## Update: native-output Windows50M continuity failure between Linux controls — 4 November 2026
+
+A separate fixed cohort completed **three physical captures and zero retries**:
+Linux50M control → actual native-output Windows GUI50M → the single predefined
+Linux5M return. The Linux controls pass the stated bounded D0/D22 checks. The
+Windows capture remains **unqualified despite400,000,000 bytes and native
+complete/no-error metadata**: one numbered UART packet is absent and two D0
+periods violate the predefined tolerance. The preceding Windows25M positive is
+retained as its own bounded case; it does not extend to50M.
+
+No product/installation/logger/buffer/firmware change was made. Windows used the
+same actual GUI705a/corebf0a/C++a1fc/decoder6287/WCHdb19, in desktop Session1/PID4904,
+with exact private C#17d809c7 and direct native STD file handles. The live PID was
+published before waiting and its original CreateProcess handle was retained
+through GUI exit0. The preparation's initial full-selftest refusal and explicitly
+reconstructed subset remain as documented; no retroactive full-suite pass is
+claimed. Linux used unchanged helperdb7c255b/core84c0c7da with LC_ALL=C.UTF-8.
+
+| Phase | Rate / samples / saved LOGIC bytes | CRC witness | D0 result |
+| --- | --- | --- | --- |
+| Linux50M | 50 MS/s / 100 M / 400,000,000 | 20 consecutive,990101–990120 | zero bad; periods49–51; boundaries18/10 samples |
+| Windows native GUI50M | 50 MS/s / 100 M / 400,000,000 | 19 valid packets;990514 absent | two bad periods35/66; boundaries22/7 samples |
+| Linux5M return | 5 MS/s / 25 M / 100,000,000 | 50 consecutive,990801–990850 | zero bad; periods4–6; boundaries2/4 samples |
+
+All phases used finite Stream,32 channels,1.6 V,Captures1,no hardware/software
+trigger, no continuous mode and no Stream windows. The same v8 source retained
+its1 MHz/50% D0 clock, D22 UART115200,camera1/SD0 and wiring. Three fresh source
+ACKs within500ms preceded each Run;22/22/52 distinct live commands were sent and
+all ACKed. The source remained open through real END/quiet/cleanup, then
+postflight STATUS/ACK and close. Original metadata/HEADER/END and native
+controller/helper exits are valid; no locale normalization or timer-as-END
+substitution was needed. MCU uptime across serial connections is not asserted.
+
+### The negative is already present in the exterior-kernel data
+
+Windows D22 contains exactly532 decoded bytes:19 complete, CRC-valid28-byte
+messages990501–990513, then990515–990520. Both independent UART decoders agree,
+with zero warnings, bad CRCs, repeated numbers or malformed interior lines.
+The source independently ACKed every distinct command990501–990522, including
+990514. ACK/host flush is not a timestamped electrical emission guarantee.
+
+D0 rising-edge intervals are35 samples starting at64,239,597 and66 samples at
+67,108,839, versus the predefined49–51 bound at50M. Their independently mapped
+RAW brackets are[256958368,256958560) and[268435328,268435648); the second straddles
+the256MiB RAW boundary. These addresses localize observations, not a demonstrated
+firmware/memory-capacity cause. The990513→990515 first-data-bit interval is
+9,909,567 samples (0.198191340 s at the nominal rate), while the corresponding
+host after-flush interval is0.198177494 s. These different observations do not
+measure UART latency or prove an exact duration of missing samples.
+
+All saved LOGIC bytes match independent RAW conversion. RAW sizes are400,556,032 /
+400,556,032 /100,663,296 bytes. Kernel accounting preserves all bytes and original
+order in796 /780 /224 events. Windows401,604,608 positive IN bytes are exactly
+RAW plus its retained1,048,576-byte worker-unconsumed sidecar. Therefore the
+observed mismatch is not introduced by GUI conversion, archive saving or replay;
+it is present in data captured by the exterior Linux kernel. This does not
+separate the source/device/bridge/SDK/VMware/KVM layers or identify one cause.
+
+The specific older128MiB-shift replay candidate was checked independently:
+RAW[134217728,265782272) versus[268435456,400000000) differs in7,687,738 bytes.
+It is not the earlier exact131,564,544-byte repeated range. No repeated numbered
+packet is observed here. This inequality does not exclude every smaller replay,
+replacement or loss mechanism; periodic/idle channels are not unique time IDs.
+
+### Cleanup, file preservation and dispatch limits
+
+Native Save/Open/Save As preserves400,000,000 bytes and **every archive member
+and metadata field exactly**, including the original complete status and the
+negative payload. First SR/PVS hashes stay intact. The persistent file observer
+records the current HEADER/400MB/END/Stopped, no hardware ARM and exit0.
+GUI exit0 comes from the retained original process handle, its interactive task
+is removed, and all27 Windows originals were copied/SHA-verified before protected
+detach, normal VM shutdown and the reserved Linux return. The return then passed;
+no failing phase was retried or replaced.
+
+Original-order linkage accounts for382 accepted worker reads plus one sidecar
+read. New native Windows50M has3.007789 s inside the read wrapper and0.058111 s
+between calls over3.065900 s (1.8954% outside). The separately qualified native
+Windows25M case had3.979658+0.029847 s over4.009505 s (0.7444% outside). Thus the
+large PowerShell-output delay is not required for every observed continuity
+failure. These elapsed intervals include SDK/memory/queue/scheduler work and
+are not isolated CPU, logging or condition-wait measurements.
+
+An independent USBmon sweep matches original accounting. Windows50M spans
+3.064435 s ARM-completion→lastRAW-completion, with0.724083 s lacking pending IN,
+maximum one pending IN and longest gap7.319 ms. Linux50M keeps pending IN for
+all2.249992 s, maximum eight; Linux5M return keeps it for5.036464 s, maximum eight.
+The negative's longest gap is smaller than14.117 ms in the preceding qualified
+native25M case, reinforcing that a single-pause threshold cannot certify
+continuity. These are kernel observation extents, not electrical acquisition
+times. Guest/kernel clocks are not synchronized; sequential frontends and rates
+do not isolate a transport limit or prove a universal safe rate.
+
+Final read-only state: Windows off, DLA1a86:5537 at4-2/dev16/5000 Mb/s and source
+CH3408134 at3-1.2/ttyUSB2 free and unchanged. Linux is VMware; Windows is nested
+KVM. QEMU NoNewPrivs1/Seccomp2/guest-reset=false was checked before assignment and
+detach. No reset, hub cycle, flash, rewiring, installation, simultaneous capture
+or additional agent was used. The physical cohort is closed at its three-attempt
+maximum. Both Linux controls provide70 qualified consecutive packets; Windows's
+19 nonconsecutive packets are not added as a successful continuity case.
+
+Private evidence under `artifacts/native-output-50M-20261104/` retains the fixed
+plan, fresh source/product/hash/identity/resource baselines, original per-phase
+RAW/LOGIC/USBmon/metadata/source/END, data/kernel/decoder reviews, negative and
+UART-sequence localization, native GUI/config/replay/copy/shutdown/return gates,
+dispatch/interval reviews, final review and publication verification. All1,248
+product files, HEAD/status/diffs and Linux/Windows installations remain unchanged;
+all408 GUI source files and the other415 public files are unchanged. This is a
+documentation-only negative result, not a product fix or release qualification.
+Commercial SDK/firmware, private captures, VM disks and credentials are excluded.
+
 ## Update: actual GUI log path and bounded backpressure review — 4 November 2026
 
 An offline follow-up pinned the retained sources of the actual GUI705a and
