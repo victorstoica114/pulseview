@@ -1,5 +1,68 @@
 # Windows desktop capture and replay observations — 4 November 2026
 
+## Update: actual GUI log path and bounded backpressure review — 4 November 2026
+
+An offline follow-up pinned the retained sources of the actual GUI705a and
+corebf0a, not the later private worker-retirement candidate. All477 core runtime
+source files match the original build manifest; GUI logging/main/settings match
+the qualified408-file source set. It adds **zero physical acquisitions, zero
+VM boots and no product changes**. The preceding three-capture cohort stays closed.
+
+The actual call path is synchronous: `sr_log()` checks the selected level, then
+PulseView `Logging::log_sr()` calls the previous libsigrok callback before its
+own log buffer. That previous callback writes a prefix, timestamp and message
+to stderr and calls `fflush(stderr)`. The GUI then formats/buffers the message
+under its logging mutex and emits its notification. Qt messages instead use
+`Logging::log_pv()` and stdout/`endl`; the paths are not interchangeable.
+
+The WCH I/O worker uses two1MiB slots. Its frontend dispatch claims a completed
+result, logs the read, performs RAW tracing/conversion/datafeed, then releases
+the claimed slot. When both slots are busy the worker can wait on its condition
+until a slot is released. Thus slow synchronous output can delay frontend
+release and cause backpressure even though global logging is outside the I/O
+thread. This is a verified source mechanism, **not a measured queue wait**:
+retained traces do not timestamp release, occupancy or condition-wait intervals.
+Increasing buffers or moving release before consumers finish is not justified
+by these observations.
+
+Original log order and per-read linkage give382 accepted result groups plus
+one preserved sidecar read in both Windows25M cases. Each accepted group has
+one read log, RAW payload log and LOGIC log, totaling400,000,000 saved bytes.
+Differences between printed timestamps, summed over those382 groups:
+
+| Printed log interval | Native-output positive | PowerShell-output negative |
+| --- | --- | --- |
+| read log → RAW payload log | 0.039379 s; median78 µs | 2.328280 s; median5000 µs |
+| RAW payload log → LOGIC log | 0.240258 s; median551 µs | 2.568516 s; median5603 µs |
+| LOGIC log → next read log | 3.728123 s | 3.647471 s |
+| Sum across all three intervals | 4.007760 s | 8.544267 s |
+
+These are local emitted-log intervals, separate from the embedded SDK read
+spans and kernel spans in the preceding update. The `sr:` prefix is written
+before taking the printed timestamp. Each difference includes remaining
+callback output, GUI buffering/signals, conversion, RAW disk I/O, datafeed,
+scheduling and part of the next log prefix. It is not an isolated duration of
+stderr, Qt, CPU work or a condition wait. Cross-cohort timestamps are not aligned.
+
+The core default is WARN; these frequent per-read/payload/LOGIC messages are
+DBG and are filtered before callback invocation at the default level. Both
+physical25M cohorts deliberately selected loglevel4 and RAW tracing. The retained
+installed Windows command launcher, hash2ba8d1a2 confirmed by postflight, invokes
+the GUI directly; the old private laboratory launcher used PowerShell
+`Start-Process -RedirectStandardOutput/-RedirectStandardError`. Neither launcher
+nor product logging was changed by this audit. This does not qualify a new
+physical default-WARN run or every possible parent-process output target.
+
+The evidence supports keeping diagnostic capture output on the qualified native
+file path, without introducing a speculative product logger, queue or buffer
+workaround. It still does not prove the origin of the old temporal replay,
+missing packets or0B failures, guarantee25M/all32 electrical channels, or erase
+any negative. Evidence under `artifacts/gui-log-path-review-20261104/` pins input
+hashes, original-order per-read intervals, build/source and installed-launcher
+linkage. All product files, installed artifacts and original captures remain
+unchanged; Windows remains off with the DLA/source free. This is documentation
+only, with no new release qualification.
+
 ## Update: bounded physical capture with native Windows log output — 4 November 2026
 
 A new, fixed cohort completed **three physical captures, zero retries, and no
