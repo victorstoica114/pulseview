@@ -1241,7 +1241,17 @@ BOOST_AUTO_TEST_CASE(stream_window_toolbar_controls_follow_mode_after_layout)
 		QMainWindow window;
 		pv::toolbars::MainBar bar(session,&window,view.get());
 		window.addToolBar(&bar);
-		window.resize(2600,160); window.show();
+		window.show();
+		const auto fit_toolbar=[&] {
+			QApplication::processEvents();
+			// Native windows may cap resize() at the screen width. Reserve the
+			// toolbar's actual size so overflow does not hide otherwise visible actions.
+			const auto width=bar.sizeHint().width();
+			window.setMinimumWidth(width);
+			window.resize(width,160);
+			QApplication::processEvents();
+			BOOST_REQUIRE_GE(bar.width(),bar.sizeHint().width());
+		};
 		auto* check=widget<QCheckBox>(bar,"stream_windows_enabled");
 		const auto action_for=[&](QWidget* control) -> QAction* {
 			for(auto* action:bar.actions()) {
@@ -1251,7 +1261,7 @@ BOOST_AUTO_TEST_CASE(stream_window_toolbar_controls_follow_mode_after_layout)
 			return nullptr;
 		};
 		for(bool enabled:{initial,!initial,initial,!initial}) {
-			check->setChecked(enabled); QApplication::processEvents();
+			check->setChecked(enabled); fit_toolbar();
 			BOOST_CHECK_EQUAL(session.stream_windows_enabled(),enabled);
 			for(const auto& name:{"softwareTriggerButton","window_pretrigger_percent"}) {
 				auto* control=widget<QWidget>(bar,name);
@@ -1266,7 +1276,7 @@ BOOST_AUTO_TEST_CASE(stream_window_toolbar_controls_follow_mode_after_layout)
 			f.context->input_formats().at("binary"),std::map<std::string,Glib::VariantBase>{
 				{"numchannels",Glib::Variant<gint32>::create(8)},
 				{"samplerate",Glib::Variant<guint64>::create(1000000)}}));
-		QApplication::processEvents();
+		fit_toolbar();
 		BOOST_CHECK(session.stream_windows_enabled()); // Retain the preference for the next device.
 		for(const auto& name:{"softwareTriggerButton","window_pretrigger_percent"}) {
 			auto* control=widget<QWidget>(bar,name);
@@ -1274,7 +1284,7 @@ BOOST_AUTO_TEST_CASE(stream_window_toolbar_controls_follow_mode_after_layout)
 			BOOST_CHECK(!action->isVisible());
 			BOOST_CHECK(!control->isVisible());
 		}
-		session.set_device(source); QApplication::processEvents();
+		session.set_device(source); fit_toolbar();
 		for(const auto& name:{"softwareTriggerButton","window_pretrigger_percent"}) {
 			auto* control=widget<QWidget>(bar,name);
 			auto* action=action_for(control); BOOST_REQUIRE(action);

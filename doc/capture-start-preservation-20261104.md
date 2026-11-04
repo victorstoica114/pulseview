@@ -2,10 +2,12 @@
 
 Qualified scope, 4 November 2026: the Session source correction below and the
 Linux frontend built from it. The same preservation contracts pass natively on
-Windows. Delivery of the combined Windows frontend remains unqualified because
-one unchanged toolbar visibility test fails six assertions with either Session
-version (AUD019). This change does not repair the separate Buffer transport or
-electrical failures documented in [the earlier investigation](capture-start-validation-20261103.md).
+Windows. The later [toolbar layout follow-up](toolbar-layout-validation-20261104.md)
+identifies the six original Windows assertions as an undersized test fixture and
+corrects that test without changing the GUI. Broader Windows GUI/high-rate
+capture qualification remains outside this report. This change does not repair
+the separate Buffer transport or electrical failures documented in
+[the earlier investigation](capture-start-validation-20261103.md).
 
 ## Defect and correction
 
@@ -44,9 +46,10 @@ differs from fork master `1965b38`. Corrected Session SHA-256:
 `8ff28276a7b1fff20c31f38f73495e37248916e797bf35444925dc06aaba2cab`.
 Original Session: `64e41f8d15e4e90be11afd823f9c44fb974441c154667b9f4268c8a1778eda25`.
 The fresh Linux build passes all 78 frontend regression cases, including startup
-Stop, repeated captures, Stream windows, collection replay and saving. Native
-Windows retains the six identical baseline toolbar assertions mentioned above;
-it is not a fully passing Windows suite.
+Stop, repeated captures, Stream windows, collection replay and saving. The
+original Windows run retained six identical toolbar assertions. The later
+fixture-only correction passes all78 cases on native Windows and offscreen,
+with unchanged GUI objects; see the linked follow-up for scope and controls.
 
 Linux GUI SHA-256:
 `d445d284114cfd6f30a1f0bacca6c375d6df4466afab3be86530276823ad178d`.
