@@ -1,5 +1,73 @@
 # Windows desktop capture and replay observations — 4 November 2026
 
+## Update: controlled UART witness cohort
+
+A separate, fixed two-acquisition cohort addressed the demonstrated source
+preflight gap. It did not repeat the closed five-acquisition cohort. The old
+readiness file was still present with a dead owner and zero ECHO commands. A
+private pre-start check now requires a live owner, ACKs for three consecutive
+ECHO commands, and latest command activity no older than 500 ms. It rejects
+the old artifact, missing or
+partial acknowledgements, a dead owner and expired activity; a current ordered
+control is accepted. This check does not by itself prove electrical capture.
+
+The source was owned by the same bounded foreground orchestrator as each Run,
+with commands, received serial bytes, acknowledgements and final closure kept.
+There was no detached source waiting during GUI configuration. Neither product
+code nor installed binaries changed. The limit was two physical acquisitions,
+zero retries; a failure ended the remaining cohort. Serial connections were
+opened separately per OS; no uninterrupted MCU uptime is claimed.
+
+| New control | Verified outcome |
+| --- | --- |
+| Linux Stream, 5 MS/s, continuous with host-count Stop at 25,165,824 samples | Complete 100,663,296 bytes (100 MiB); RAW, original feed and actual Segment storage identical; D0 periods 4–6 with zero outliers; all 50 fresh CRC packets 876601–876650 in order, two UART decoders identical, zero decoder warnings and all source ACKs |
+| Actual Windows GUI, Stream, 5 MS/s, finite 50-million-sample request | First-data timeout with zero RAW and zero worker-unconsumed bytes; source pre-start gate passed, producer stayed alive, all 90 serial commands 876801–876890 acknowledged; no captured CRC packets or Windows continuity qualification |
+
+The Linux observer recorded 224 events with exact request/completion order and
+byte conservation, no lost or truncated events. HEADER, END, Stop, drain and
+close passed. The last preflight command preceded the first USB OUT by at most
+285.559 ms, cross-checked using the retained host clock pair. The new continuous
+control deliberately differs from the earlier failing finite SETUP. It does
+not retest or repair that finite timeout.
+
+The Windows SDK made four ordered 1 MiB reads, each returning zero bytes with
+status zero / Windows error zero. The first-data deadline was reported at
+approximately 3 s; the worker then accepted Stop, obtained two empty drain
+reads, retired and closed both traces without a diagnostic failure. The GUI
+showed `Capture incomplete`. A native Save attempt reported that a logic channel
+without data cannot be saved; no export file was created. No empty payload or
+replay result was fabricated.
+
+Windows serial command emission spanned approximately 0.5–9.4 s after the native
+Run request. Some commands followed the early acquisition Stop; the 90 ACKs are
+control-port evidence, not 90 captured packets or an electrical D22 claim. This
+attempt excludes a missing source process as its explanation. It does not
+establish the reason for the original producer termination or the acquisition
+failure. A Windows kernel USB trace was not recorded for this new attempt.
+
+All three logged pre-Stop / SETUP / ARM 54-byte prefixes match the corresponding
+prefixes of the earlier successful Windows 200 MB acquisition. This compares
+the logged active fields, not full kernel-observed 2048-byte transfers. Different
+outcomes with these same fields do not establish a deterministic setup defect,
+a firmware cause or a transport fix. The first-data and replay issues remain
+open, and the GUI candidate remains uninstalled.
+
+Cleanup also retained a laboratory sequencing failure: the initial archive step
+found the GUI process still running, and VM shutdown was requested before copying
+finished. All original guest files were subsequently recovered after booting
+without DLA assignment; their hashes were verified and the temporary task was
+removed. The launcher exit record is absent, so orderly GUI exit zero is not
+claimed. Backend Stop, quiet drain and worker retirement had already completed.
+A final normal VM shutdown left USB and serial owners absent; the DLA remained
+at address 4.16 / 5000 Mb/s and answered the DL32 identification query. There was
+no DLA reset, hub cycle, firmware write or extra acquisition during recovery.
+
+Raw data, serial and USB traces, desktop/authentication evidence and VM material
+remain private. Only this reviewed report is published. The earlier results
+below retain their original scope and failures.
+
+## Earlier desktop cohort: five acquisitions, zero retries
+
 The real Windows desktop GUI completed four planned acquisitions and preserved
 all captured data through native Save As, file reopening and another Save As.
 This is **partial qualification, not release approval**: the Windows UART source
