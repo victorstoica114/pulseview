@@ -1,5 +1,53 @@
 # Windows desktop capture and replay observations — 4 November 2026
 
+## Update: host-only automatic count Stop check
+
+The old laboratory controller was reproduced unchanged with every hardware,
+serial, QMP and SSH interface replaced. A simulated flow query delayed by
+2.964 seconds makes it return success and close its source while the simulated
+acquisition is still active. No physical acquisition was started in this check.
+That controller remains retired; its closed physical cohort was not resumed.
+
+A private entry point then exercised the existing MainWindow, Session and View
+objects on Linux XCB and the Windows platform. The Windows test ran in SSH
+Session 0, not Victor's interactive desktop. The application source snapshot
+and the original GUI objects were retained; no product binary was installed.
+Configuration uses Session/device APIs; toolbar editing and displayed selector
+refresh are outside this check.
+
+The standard Demo driver lacks CONTINUOUS GET/SET. A probe-only Device adapter
+therefore temporarily changes its sample bound from 5 million to 100 million.
+The existing frontend extracts one 5-million-sample window at 1 MS/s, with a D0
+rising trigger and 1% pretrigger, and stops the source when that window finishes.
+This adapter is restricted to Demo and is not product code or a DLA workaround.
+The main Qt/observer thread was deliberately paused for seven seconds.
+
+| Host platform | Internal window Stop after Run | Following finite capture |
+| --- | --- | --- |
+| Linux XCB | 5.047586 s, before the observer resumed | Exactly 5 million samples / 20,000,000 bytes |
+| Windows, Session 0 | 5.039201 s, before the observer resumed | Exactly 5 million samples / 20,000,000 bytes |
+
+Both returned to Run without an external Stop toggle. The sample limit and
+trigger were restored before the following finite capture in the same session.
+All four payloads match an independent Gray-to-binary inverse yielding counters
+1 through 5,000,000 on the saved 32-bit values. The archives, member SHA256/CRCs,
+chunk order, source origins and triggers passed, and saved replay matched.
+The automatic window has explicit `complete` status. The ordinary finite Demo
+source emits no outcome metadata: its empty in-memory status is serialized as
+`unknown` and read back as such; it is not relabelled complete by this check.
+
+Initial fixture failures are retained: unsupported native Demo controls,
+rejected zero sample limit, and an incorrect expectation that empty Demo status
+round-trips as an empty string. The final fixture checks the format's explicit
+`unknown` representation. These are laboratory assumptions, not product fixes.
+
+This verifies the frontend count Stop under a stalled observer. It does not
+qualify DLA CONTINUOUS restoration, USB/electrical behavior, a physical
+continuous-to-finite transition or the earlier unrestricted continuous capture.
+There were zero physical captures, no DLA assignment and no serial source opens.
+The separate failed timing attempt remains unqualified. Product sources and
+installed launchers remain unchanged; the GUI candidate is still uninstalled.
+
 ## Update: finite first-data deadline experiment
 
 A separate Linux-only diagnostic tested whether a finite Stream acquisition can
