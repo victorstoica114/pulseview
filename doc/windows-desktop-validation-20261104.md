@@ -1,5 +1,79 @@
 # Windows desktop capture and replay observations — 4 November 2026
 
+## Update: native API controls with source closure after confirmed END
+
+A separate plan was capped at three physical acquisitions: an installed Linux
+baseline, native Windows API capture, and installed Linux return. Each required
+independent qualification of the preceding acquisition. No physical acquisition
+was repeated. Both hosts used the already qualified, unchanged C API/actual
+Segment helper; this path does not run Session, MainWindow or View.
+
+The laboratory completion check requires the native process to finish, exactly
+one HEADER/END and closed-session marker, RAW trace closure and quiet cleanup.
+Elapsed time, ARM or a successful SSH launch alone cannot satisfy it. Thirty
+offline controls using both hosts' retained logs reject missing, stale, duplicated
+or conflicting evidence, while distinguishing a cleanly ended failure from a
+successful acquisition. A first predicate mistake admitting exit 1 with complete
+metadata was caught and retained before physical testing. The corrected checker
+was also exercised by the real Windows bridge.
+
+The guest bridge stays connected and reports READY before source preflight.
+After three fresh acknowledged commands, GO travels through that same pipe.
+The source remains open through native process exit and confirmed END; it is
+then checked and closed. No timed Run/Stop toggle controls these captures.
+
+All three finite Stream captures used 32 channels, 1.6 V, no trigger,
+5 MS/s and a 25-million-sample target:
+
+| Physical acquisition | Stored bytes / captured fresh CRC packets | First LOGIC after returned ARM | Passive USB records |
+| --- | --- | --- | --- |
+| Linux baseline | 100,000,000 / 50 | 58.224 ms | 224 |
+| Windows C API | 100,000,000 / 50 | 59.084 ms | 216 |
+| Linux return | 100,000,000 / 50 | 58.022 ms | 224 |
+
+In each case, the preserved RAW prefix converts independently to the original
+feed and actual Segment bytes exactly on all 32 stored channel values. D0
+periods are four to six samples, with zero outliers including boundary checks.
+Two UART decoders agree on all 50 consecutive CRC packets without warnings.
+All 52 live serial commands and three preflight commands were acknowledged;
+ACKs beyond the capture interval are control evidence, not additional samples.
+Electrical witnesses remain limited to D0/D22.
+
+Each original RAW contains 100,663,296 bytes. The suffix beyond the requested
+100,000,000 LOGIC bytes is retained. Every RAW byte matches passive outer-Linux
+USB completions in original completion/submission order, with no lost or
+truncated monitor events and all positive sample bytes accounted. Windows has
+96 positive 1 MiB completions; the worker-unconsumed sidecar is empty. All four
+complete 2048-byte Stop/SETUP/ARM/Stop commands have valid framing/CRCs and are
+identical across the three acquisitions. These observations are not a measured
+physical bus utilization or a proof of arbitrary all-channel continuity.
+
+One Windows loader preparation was rejected before `sr_init`: the bridge passed
+an expected DLL path with backslashes while the unchanged helper compares a
+slash-normalized path. Exit 2 produced no RAW, configuration or ARM files.
+An offline DLL mapping check reproduces the mismatch; only the bridge's
+environment string changed to canonical slashes. The rejected launch and its
+source preflight are preserved. Only the previously unstarted acquisition phases
+continued; the DLA assignment was kept without a reset. It is not a repeated
+physical capture or an unrecorded successful preparation.
+
+Windows ran through SSH Session0 in nested KVM; Linux runs in VMware, on the
+same DLA `1a86:5537`, USB path `4-2`, address `4.16`, negotiated 5000 Mb/s.
+Source v8, PWM 1 MHz / 50%, camera
+and wiring were unchanged, SD disabled; DLA firmware version remains unknown.
+Serial connections were separate per phase, so uninterrupted MCU uptime is not
+claimed. All 18 Windows original files were copied and SHA256-verified before
+normal VM shutdown. The guarded handover, Linux return, final DL32 identification
+and released USB/serial owners passed. No hub cycle, reset, firmware write,
+product-source change or GUI installation was performed.
+
+This qualifies these low-rate API controls and the laboratory source-completion
+rule. It does not repair or invalidate the earlier zero-byte starts or replay
+failures. The earlier interactive GUI timeout requested 50 million samples;
+this API control requests 25 million, so it is not a matched GUI/API causal test.
+Interactive desktop, physical continuous-to-finite and broader high-rate Windows
+qualification remain open. The GUI candidate remains uninstalled.
+
 ## Update: host-only automatic count Stop check
 
 The old laboratory controller was reproduced unchanged with every hardware,
