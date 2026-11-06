@@ -1,5 +1,69 @@
 # Windows desktop capture and replay observations — 4 November 2026
 
+## 6 November follow-up: replay without a long initial-prefix fputs call
+
+The failed parent-polling observation was reproduced in software: while the
+controller did no polling during a blocked-pipe fixture, the old sampler
+captured zero states and a separate passive process captured 49 fully
+contained pipe-wait states. Nine contracts and the existing helper's
+20 MiB + 12 byte feed/Segment integration test pass. An incomplete ready-JSON
+publication was caught before launching that helper, preserved and fixed by
+atomic exclusive publication with an interleaving regression. Six additional
+phase/recovery/coverage contracts passed before hardware I/O.
+
+A new plan completed exactly two acquisitions, zero retries and zero Windows
+boots: one finite Stream 50 MS/s / 400,000,000 B observation with the same
+512 KiB/one-IN core, prefix observer and CAPI/storage helper, followed by the
+reserved 5 MS/s / 100 MB return with the installed core and no diagnostics.
+The independent sampler starts before the original helper process, binds
+PID/starttime/UID/parent/executable, reads only mmap and guest `/proc`, stores
+bounded RAM records and writes once after normal target exit. It sends no
+target signals and inherits no USB/serial descriptors. All timing and denied
+fields are preserved; observer/sampler load can affect the run.
+
+The target still fails integrity: three D0 periods 30/35/34 instead of
+50 ± 1, 99 valid CRC occurrences but 92 unique numbers. The sequence jumps
+772159→772194 then 772200→772168; 772194–772200 repeat. Both global STOP
+decoders agree without an unchecked EOF frame. Accepted RAW
+`[238280704,265782272)` equals `[372498432,400000000)`:
+**27,501,568 B at +134,217,728 B**, SHA256 each
+`fa91dc3dfd6b349aa791f92a7c2cc1571ddfd553112a7b10794731473ad21c18`.
+The first two fresh pairs, 772194/772195, separately pass local independent
+and SDK full-final-STOP checks in both copies. All 400,031,744 B kernel/RAW
+and the accepted all-channel independent conversion/feed/Segment equality
+are retained; the surplus is not discarded or appended to accepted data.
+
+All 2,315 initial-prefix fputs calls and 763 callbacks have complete telemetry.
+The maximum actual initial-prefix fputs duration is **2.229495 ms** across
+all log categories. From ARM through the final active RAW completion, the
+largest Linux-observed interval without a pending IN request is **7.654 ms**.
+Thus an individual initial-prefix fputs call of at least 20 ms, or a Linux
+no-pending-IN interval of at least 20 ms in that acquisition window, is not
+necessary for this corroborated replay. This does not exclude
+cumulative logging cost, other logger/RAW/storage stages, pending-request
+waits or device/bridge/VM behavior, and does not establish a root cause.
+
+The independent sampler retained **705 observations**, maximum sample-start
+gap **5.706965 ms**, zero skipped slots, and was bound and recording at least
+158.989692 ms before actual ARM. Readiness uses original command/completion/
+read clock brackets without a fitted outlier or assumed sample-zero epoch;
+kernel realtime mapping assumes no incompatible step. Guest syscall access
+was denied in all observations and is not claimed as a syscall trace.
+Startup and cadence are verified on hardware. No initial-prefix call reached
+the predeclared 20 ms threshold, so blocking-site coverage for such a call
+remains unqualified. Missing state from the older 172/327 ms events is not
+filled retroactively, and the cohort is not retried to seek the old event.
+
+The return passes D0 and 50 consecutive CRCs, 773101–773150, with exact
+kernel-prefix/feed/Segment equality. All source commands have exactly one
+ordered ACK. Actual END, final Stop, sequential quiet reads, finalized
+observers, source-close ordering and original process waits of zero are
+retained. DLA USB 3-2 / 5,000 Mb/s, source v8, firmware, wiring and hub remain
+unchanged; USB/source are free and Windows KVM is off. Linux runs in VMware.
+No product sources or installed binaries changed. The sampler/core/observer
+remain private LAB diagnostics; no Windows or arbitrary 32-channel electrical
+qualification. AUD006 remains open, with no logging or Segment fix justified.
+
 ## 6 November follow-up: measured fputs duration; live thread state remains unqualified
 
 A new bounded Linux observation used the unchanged private 512 KiB/one-IN
