@@ -1,5 +1,73 @@
 # Windows desktop capture and replay observations — 4 November 2026
 
+## 6 November follow-up: measured fputs duration; live thread state remains unqualified
+
+A new bounded Linux observation used the unchanged private 512 KiB/one-IN
+core and existing native CAPI/storage helper, with an explicitly hashed
+private preload around the actual `fputs("sr: ", stderr)` call. It preserves
+output, return value and errno, calling the real function once. A preallocated
+1,310,848 B mmap records wall/thread CPU/rusage; there is no per-prefix trace
+write or allocation. The observer still changes timing. Eight software
+contracts and four phase/recovery/clock contracts passed before device I/O,
+including the actual logger, blocked pipe, pause before entry, overflow,
+exclusive refusal and the existing feed/Segment ABI selftest.
+
+The fixed plan completed exactly two acquisitions, zero retries and zero
+Windows boots: one observed finite Stream capture at 50 MS/s, 100 million
+samples / 400,000,000 LOGIC bytes, then the reserved 5 MS/s / 100 MB return
+with the installed core and no observer. DLA `1a86:5537`, USB `3-2`, negotiated
+5,000 Mb/s, source v8, firmware, wiring and hub were unchanged. Linux is VMware;
+Windows KVM remained off. The previously closed cohorts were not rerun.
+
+The target again fails integrity despite native completion: five D0 faults,
+99 CRC occurrences but 78 unique numbers, with 768180–768200 repeated.
+The malformed UART fragment and global SDK STOP/framing refusal are retained.
+Accepted RAW `[181605536,265782272)` equals `[315823264,400000000)`:
+**84,176,736 B at +134,217,728 B**, SHA256 each
+`155d39fd3c7417661b3a8492625643b76b54a7320026c7c8a45d8e93db4e1784`.
+The deterministic first two fresh pairs, 768180/768181, separately pass local
+independent and SDK decoding with full final STOP high for both copies.
+Original-order kernel/RAW contains 400,031,744 B; the accepted prefix converts
+independently to exactly feed and actual Qt Segment storage. Surplus is kept.
+
+All 2,315 prefix records and 763 callbacks match the original stderr/kernel
+ordinals in the native main thread, without telemetry overflow or errors.
+At callback 252, RAW offset 132,120,576 B, the actual real-fputs interval is
+**172.231798 ms**, with thread CPU clock span **0.086960 ms**. The broader
+rusage bracket records one voluntary, zero involuntary switches and one
+minor/zero major faults; it includes observation boundaries and is not an
+isolated syscall trace. Time before observer entry is bounded 0–13.029 us;
+argument-to-logger timestamp is 172.271899–172.294867 ms. This new delay is
+inside the measured call. It does not assign the older 327 ms interval.
+Same-packet RAW/conversion/feed/Segment work follows the call; no ten-MiB
+chunk fills in this callback. Wall duration includes waiting/descheduling.
+
+The call lies inside the original 173.695 ms no-pending-IN gap. The first
+faulty completion arrives **395.846663–395.913286 ms after the call returns**,
+so no immediate splice or direct corruption cause is claimed. Clock origins
+are bounded from all original command/completion/synchronous-read constraints,
+without fitting the outlier or assuming an electrical sample-zero epoch.
+Kernel realtime mapping assumes no incompatible clock step; the measured
+call duration itself uses a monotonic clock.
+
+**Live thread-state attribution remains unqualified:** no `/proc` samples
+were obtained during the delay, despite the software sampler test and no
+sampler exception. The source parent's 187.223529 ms command-start gap spans
+the call, without proving why sampling missed it. There is no wchan witness
+for a blocked write, FILE lock, disk, scheduler or outer VMware cause. The
+instrumented run and its incomplete coverage are retained without retry.
+
+The 5 MS/s return passes D0 and 50 consecutive CRCs, 769101–769150, with exact
+kernel-prefix/feed/Segment equality. All source commands have one ordered
+ACK. Both phases retain actual END, final Stop, sequential quiet reads,
+finalized observer, source-close ordering and original process waits of zero;
+USB/source owners are free. Ninety-four preparation files, 145 physical
+artifacts and 1,587 prepared inputs are frozen privately. Product sources,
+dirty work and installed binaries are unchanged. No observer/core promotion,
+logger/Segment fix, new Windows qualification or arbitrary 32-channel
+continuity claim. The fputs duration is qualified; root-cause attribution
+is incomplete and AUD006 remains open.
+
 ## 6 November follow-up: the 512 KiB stall precedes conversion and storage
 
 Read-only analysis of the closed USB-quantum pair accounts for all 382
