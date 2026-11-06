@@ -1167,6 +1167,8 @@ bool Session::has_view(shared_ptr<views::ViewBase> view)
 
 double Session::get_samplerate() const
 {
+	// Capture replacement clears the segment containers under this same lock.
+	lock_guard<recursive_mutex> lock(data_mutex_);
 	double samplerate = 0.0;
 
 	for (const shared_ptr<pv::data::SignalData>& d : all_signal_data_) {
