@@ -1,5 +1,100 @@
 # Windows desktop capture and replay observations — 4 November 2026
 
+## 6 November: a separately defined 50 Hz reference passes the Linux control
+
+This is a new reference profile for AUD-002/AUD-006, defined and checked before
+I/O. The preceding 100 Hz cohort remains refused under its original 20 ms
+limits. No thresholds or results in that closed cohort were changed. The new
+profile reduces the nominal numbered-command rate from 100 Hz to 50 Hz; it
+does not change the acquisition rate, firmware, D0 clock, camera/SD setting,
+wiring or product code. There were exactly two finite Linux captures, no
+physical retry and no Windows boot in this cohort.
+
+The reference has a specific coverage target. The earlier Windows 50 MS/s
+repetition had 8,823,808 bytes present in both accepted LOGIC copies: 2,205,952
+samples, or 44.119040 ms at the nominal rate. A message start gap of at most
+40 ms plus a complete-message envelope of at most 3 ms leaves a full numbered
+CRC witness in any contained window of that duration, with capture boundaries
+checked separately. This does **not** guarantee a numbered witness in every
+1 MiB / 5.243 ms interval or prove arbitrary-channel temporal integrity.
+
+The fixed new limits were 99 ± 3 fresh consecutive CRC messages in the 2 s
+capture, GPIO start gaps 2..40 ms with mean 18..22 ms, scoped host write gaps
+5..40 ms, full-message envelope at most 3 ms, initial full START within 30 ms
+and final full STOP within 20 ms of the capture edge. The envelope includes
+the last nominal STOP bit, whose GPIO interval must remain high; it is not
+just the DATA annotation span. Twenty-five private offline contracts checked
+acceptance, refusals, host scope, full STOP and an independent interval oracle.
+The existing 48 Linux kernel/END contracts and their unchanged guard were
+reused. The first new offline fixture expected a boundary refusal but first
+violated a GPIO gap; that test failure and the corrected fixture are retained.
+The real 198-message 100 Hz input is refused by the new profile's count, and
+its original 20 ms refusal is also reproduced unchanged.
+
+| Finite Linux capture | Accepted LOGIC / positive kernel bytes | Electrical witnesses | Result |
+| --- | --- | --- | --- |
+| 50 MS/s, 100 million samples, new 50 Hz reference | 400,000,000 / 402,653,184 | D0: zero bad periods, 49..51 samples, boundary offsets 45/42 samples; 99 consecutive valid CRCs `610101..610199` | New reference profile passes |
+| Reserved 5 MS/s return, 25 million samples, 10 Hz reference | 100,000,000 / 100,663,296 | D0: zero bad periods, 4..6 samples, boundary offsets 5/1 samples; 50 consecutive valid CRCs `611101..611150` | Return passes |
+
+For the new 50 Hz capture, all 98 GPIO start intervals were
+16.002860..22.001600 ms, mean 19.998498 ms. The 99 scoped host intervals
+(`610101..610200`, captured span plus the available adjacent command) were
+16.008803..22.004105 ms, mean 20.012804 ms. All 99 complete-message envelopes
+were 2.415960..2.417440 ms. Initial full START / final full STOP coverage was
+23.783840 / 13.947080 ms. Maximum GPIO gap plus maximum envelope was
+24.419040 ms, below the fixed 44.119040 ms target; a separate integer endpoint
+oracle checked every inter-message and capture-boundary interval. These are
+nominal sample coordinates, not a clock alignment or emission-latency claim.
+
+Two independent valid-STOP UART decoders agreed on all 2,772 bytes at 50 MS/s
+and all 1,400 bytes on the return; neither had an unchecked EOF frame or
+interior warning. There were 117 live host commands `610101..610217` and 52
+return commands `611101..611152`, plus three fresh preflight commands per
+phase. Every command had exactly one in-order ACK. Host commands and ACKs
+are not electrical emission counts. Native ARM-return to last LOGIC was
+2.281032 s / 5.037345 s respectively; this is not isolated CPU timing or a
+causal performance comparison.
+
+The exact same helper `db7c255b`, active Linux core `84c0c7da`, actual Segment
+source `b03fa259`, DBG4, 32 channels, 1.6 V and finite Stream/no-trigger mode
+were used. Optional `FNIRSI_DLA32_WIRE_TRACE` remained absent, verified in the
+child environment. Passive usbmon, exact-feed logging, Segment storage and
+ordinary debug logging remained active. All four original USB command packet
+hashes per phase match the preceding cohort. Independent NumPy conversion of
+the original-order kernel prefix equals every accepted feed/Segment byte on
+all 32 channels. The 2,653,184 / 663,296 surplus active kernel bytes are kept
+in explicitly derived RAW files and are never appended to accepted LOGIC;
+there are zero positive pre-ARM/post-Stop bytes. Without native RAW tracing,
+the accepted-prefix boundary is not asserted to be the native consumption
+boundary.
+
+Both captures completed with exact requested counts, one native HEADER/END,
+no reported error/watchdog, cleanup and exit 0. The source owner remained
+open through real native END/exit, observer closure and independent kernel
+proof: successful Stop, all requests closed and two sequential empty reads
+submitted after Stop completion. Only then were postflight STATUS/ACK and
+source close allowed. Timer or observer exit alone cannot release the source;
+missing proof leaves the controller in an explicit hold. This quiet policy
+is specific to the reviewed Linux transport, not a WCH/Windows ready ACK.
+
+Linux is in VMware; Windows, unused here, is nested KVM. DLA `1a86:5537` was
+USB `3-2`, bus 3/address 3 at 5,000 Mb/s. The source was CH340 `1a86:7523`,
+revision `8134`, USB `2-1.3`, bus 2/address 9, `/dev/ttyUSB1` at 12 Mb/s;
+both identities and speeds were recorded before each phase and afterward.
+Source v8 / 1 MHz D0 / 50% duty / camera=1 / SD=0 was confirmed by STATUS;
+DLA firmware revision was not interrogated or changed. Both devices are free
+and Windows is off. All 1,248 product files, repository HEAD/status/diffs,
+installed Linux binaries and 477 active runtime source files remain intact.
+The active runtime API is still distinct from the preserved repository API.
+
+The new Linux reference and its reserved return are qualified for this
+bounded setup. No Windows result, root cause, global 50 MS/s fix or release
+qualification follows. AUD-002/AUD-006 and the earlier negative captures
+remain open. A Windows comparison needs a separate plan and a review of its
+actual GUI/worker/END observation path before hardware use. Private evidence
+is under `artifacts/reference50Hz-linux-20261106/`; no private capture,
+firmware, helper binary, VM or authentication material is published.
+
 ## 6 November: bounded Linux control without synchronous WIRE tracing
 
 A new cohort performed **two Linux acquisitions, zero retries and zero Windows
