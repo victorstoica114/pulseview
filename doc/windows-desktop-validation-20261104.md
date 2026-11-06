@@ -1,5 +1,98 @@
 # Windows desktop capture and replay observations — 4 November 2026
 
+## Isolated OR/PW evaluator checked on Windows and Linux — 6 November 2026
+
+AUD-004 now has a bounded Windows **file-replay** check of the current
+software-trigger evaluator, paired with a fresh Linux run. All seven fixed
+configurations preserve every expected output byte, window origin, trigger
+offset, complete/partial status and length on both platforms. This closes an
+isolated host-test gap; it does not qualify USB acquisition, the GUI, concurrent
+decoders, 64 conditions or a sustained device rate. AUD002/AUD006 and the earlier
+Windows 50 MS/s continuity failures remain open.
+
+The input is the retained, normalized 32-channel Linux/VMware recording from
+the earlier 50 MS/s checks: 20,000,000 bytes / 5,000,000 samples, SHA256
+`b98c24075c7127668c3b69a8a5489c49549ba4e7efed284235084441a5658e70`.
+Its prior D0/D22 witnesses are historical evidence, not a new electrical test.
+The exact current `softwaretrigger.hpp` and `streamwindows.hpp` are frozen,
+hashed and compiled directly into a private standalone helper. No acquisition
+library or Qt is linked. The private harness combines the seven previously
+measured modes and uses native CPU clocks; no product code or installed binary
+is changed.
+
+Before execution, the plan fixed zero physical acquisitions/source I/O, one
+Windows boot without DLA assignment, seven evaluator processes per OS and zero
+retries. Each process makes one verification pass and three timing trials;
+each trial processes the same 5 M-sample input 100 times, resetting the engine
+between iterations: 500 M samples per trial, 10.5 billion replayed samples per
+OS across the seven modes. These are repeated in-memory samples, not newly
+captured or continuously acquired data. Configuration is unit=4, depth=2048,
+pre=1024, target=10000, nominal rate=50 MS/s and 1 MiB packets.
+
+The stage is compiled once before measurement. Timing includes evaluator
+construction, matching, allocation and output-window copying; the timed
+callback counts frames/bytes and a byte checksum. Input loading, verification
+file output and timing-log writes are outside the measured interval. A NumPy
+oracle independently derives GPIO transitions, pulse-run lengths and window
+scheduling, then compares every emitted byte against the original input slice.
+
+| Configuration | Complete + partial windows per OS | Linux M samples / process-CPU second | Windows M samples / process-CPU second |
+| --- | ---: | ---: | ---: |
+| Falling D0 | 4761 + 1 | 2044.3–2245.0 | 1684.2–1777.8 |
+| OR, D0 HIGH 400–600 ns plus impossible HIGH >100 µs | 4761 + 1 | 129.4–131.9 | 115.5–120.3 |
+| OR, D0 LOW 400–600 ns plus impossible HIGH >100 µs | 4761 + 1 | 132.4–134.7 | 118.5–119.4 |
+| OR, D0 HIGH/LOW >100 µs | 0 | 81.6–82.0 | 83.8–85.3 |
+| AND, D0 HIGH 400–600 ns and HIGH >100 µs | 0 | 81.3–82.6 | 85.6–86.0 |
+| OR, D0 HIGH >100 µs or D22 HIGH >10 s | 0 | 76.1–76.6 | 77.7–79.2 |
+| AND, D0 HIGH 400–600 ns and D22 HIGH >10 s | 0 | 77.3–77.9 | 80.0–81.0 |
+
+Ranges are the three observed trials. Linux uses `CLOCK_PROCESS_CPUTIME_ID`;
+Windows uses `GetProcessTimes` kernel+user, represented in 100 ns units. All
+21 Windows CPU durations are integer multiples of **15.625 ms** in this run.
+That observed quantization especially limits precision for the fast falling
+case; it is not a claim about every Windows timer or installation. Steady-clock
+wall intervals are retained separately. Linux runs in VMware with GCC 16.2.1;
+Windows 11 runs in nested KVM with MSYS2 GCC 16.2.0, noninteractive Session 0.
+The OS tests run sequentially. These virtualized observations are not an OS
+ranking or a bare-metal benchmark.
+
+Per OS, the verification pass preserves 14,283 complete windows and three
+partial windows, totaling **117,019,240 output bytes**. All payload hashes agree
+between OSs. Metadata fields agree; native CSV line endings are preserved.
+All 14 evaluator processes exit natively with code 0, all 42 timing trials
+process their full input, and timing frame/byte/checksum counts match the
+independent verification. The four negative configurations emit no invented
+windows. No measured case here is below 50 M samples per process-CPU second,
+but the remaining acquisition/frontend costs are excluded, so this is not a
+50 MS/s operating guarantee or a reason to infer the cause of earlier faults.
+These seven profiles do not justify a product optimization.
+
+The first Linux extraction of the Windows archive **failed verification**:
+Windows `Compress-Archive` wrote backslash entry names and the initial
+`ZipFile.extractall` preserved literal backslashes on Linux. The native Windows
+job itself had completed all seven modes successfully. The original archive,
+initial extraction and supervisor failure remain retained. A separate derived
+extraction normalizes relative path separators, rejects duplicate/traversal
+paths and verifies every original byte, size and hash directly against the
+unchanged archive and its 53-file manifest. No native helper was rerun. Both
+original refusal and corrected offline copy verification are explicit.
+
+All 53 Windows originals are copied/hash-verified before normal VM shutdown;
+native process HANDLEs provide actual exit codes. The six installed Windows
+file hashes match both pre/postflight and the earlier verified runtime. Final
+review confirms Windows off, DLA still absent, all 1248 product files and local
+HEAD/status/diffs plus Linux installed hashes unchanged. The cohort is closed
+at 14 evaluator processes, zero retries, zero physical acquisitions/source I/O
+and one Windows boot. DLA reconnection remains necessary for the next fresh
+Linux control and bounded physical Windows plan.
+
+Private evidence: `trigger-replay-windows-20261106` contains the fixed plan,
+source/input/header hashes, compiler flags and binaries, original native logs,
+payloads, independent oracle results, archive-layout refusal/recovery, copy
+manifest, shutdown, final review and cohort closure. Only this report is
+published. Product rollout, Windows50M capture and global release qualification
+remain false; no private helper, capture, SDK, VM disk or credential is published.
+
 ## Dense Linux witness: original refusal retained, private review corrected — 6 November 2026
 
 The dense-witness cohort on 4 November stopped after its first qualification
