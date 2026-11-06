@@ -1,5 +1,76 @@
 # Windows desktop capture and replay observations — 4 November 2026
 
+## 7 November follow-up: eight configured INs still depleted in a replay trace
+
+The retained multi-IN counterexample is now checked directly, without another
+capture, source command, GUI run, Windows boot or product edit. Both observations
+use the db7 CAPI+Qt Segment helper/84 core,50MS/s/100Msamples, eight initial1MiB
+IN requests before ARM and381 resubmissions in the full active scope. The product
+already configures8 transfers; setting8 is not a new fix.
+
+Every original request closes. Kernel event-order accounting covers exactly ARM
+completion through the last accepted native RAW completion:382reads/400556032B,
+including the whole final request, for400000000 accepted LOGIC bytes. Later
+processing, unused positive results, cancellation, quiet and shutdown are outside
+this receiver window. It is not sampling time, CPU time, bus utilization or FIFO
+occupancy.
+
+| Outstanding sample INs | Fresh negative duration(ms) | Historical derived-V2 control duration(ms) |
+|---|---:|---:|
+| 0 | 1455.928 | 0 |
+| 1 | 1732.349 | 0 |
+| 2..5 | 132.554 | 0 |
+| 6 | 40.669 | 3.365 |
+| 7 | 139.749 | 622.056 |
+| 8 | 247.583 | 1624.878 |
+| Total | 3748.832 | 2250.299 |
+
+The failure spends85.0472% of that window at depth0/1 despite initial/peak8.
+The control stays6..8. At the final accepted completion they have0 versus7
+requests left. A buffer holding a completed result is not an outstanding request
+or spare read capacity; zero pending does not mean the application buffers are
+free. Configured capacity and effective kernel occupancy must remain distinct.
+
+The historical control is *derived V2 only*: its original R1 live qualification
+and cancelled Windows forward phase remain refused. It is not a retroactive
+live pass. Different boots/USB paths/history also prevent a causal performance
+comparison: the historical path is4-2/bus4device16/source3-1.2, the fresh one
+3-2/bus3device3/source2-1.3; both negotiated5000Mb/s in VMware Linux. Firmware is
+unknown/unqueried. No new Windows/common product code is affected by this
+Linux-only offline analysis.
+
+All four original D0 faults are re-derived and mapped to complete32B RAW-frame
+brackets. Their containing completions change outstanding count1→0. The third
+bracket spans two completions and both are retained. Before the first faulty
+receipt there are151 nonzero-duration empty-queue intervals, totalling531.036ms,
+longest31.423ms. This trace cannot rule out an earlier depletion role. The largest
+559.303ms empty interval starts once all four fault-containing receipts have
+occurred, preserving the previous ordering conclusion. Receipt times are not
+physical sample-production times.
+
+Direct comparison of original kernel bytes re-verifies61808640B repeated at
+exactly+134217728B, SHA24f5f247ca8d5c7f0b91dfb37dd51fc45b661aad03772fc9595861d4f686e849
+for each full copy. Only59155456B lie within both400MB accepted LOGIC prefixes.
+The failure's2097152B unused positive RAW stays separately classified. Accepted
+native RAW/kernel-prefix hashes also match in both cases; prior all32
+conversion/storage equality and D0/D22 electrical-witness limits are preserved.
+
+15 contracts pass, including1000 nonempty duration-oracle scopes,4096 edge-frame
+comparisons and unique old-schema command bindings. An independent midpoint
+interval oracle reproduces all756/763 real duration intervals and event states,
+plus each fault-prefix histogram. All35 original inputs and25 frozen analysis
+files remain intact; product1248 and installed Linux binaries/launchers are
+unchanged. The first analysis refused missing command record ordinals in the
+older metadata. Its source/refusal are preserved; unique original byte-hash/time
+S/C bindings now supply those ordinals without rewriting the old reviews.
+
+A single *configured* IN is not necessary for this replay, and configuring8 is
+not sufficient to preserve integrity or maintain8 pending. This does not disprove
+a dynamic low/empty-queue condition: it was present before the first fault.
+No receiver redesign, buffer change, causal fix or new rate qualification follows.
+AUD006 remains open. Private evidence: `artifacts/multi-in-occupancy-20261107/REVIEW.md`.
+
+
 ## 7 November follow-up: one kernel IN does not match receiver buffering
 
 A read-only audit of five retained50MS/s/400MB captures distinguishes kernel
