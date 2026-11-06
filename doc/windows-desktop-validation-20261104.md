@@ -1,5 +1,96 @@
 # Windows desktop capture and replay observations — 4 November 2026
 
+## 6 November update: the Demo restart throw is localized; the snapshot candidate remains unqualified
+
+The restart failure reported below was subsequently captured in the original
+private Windows GUI executable. No DLA was assigned to the guest and the
+serial source was never opened. Three initial Demo acquisitions under the
+debugger completed without reproducing the throw; that observation did not
+reclassify the earlier failure. A separate bounded soak on the same running
+GUI completed its first Stop and cancellation, then stopped at the throw on
+the following finite Run. All later cycles were cancelled, with no retry.
+
+The captured GUI-thread stack, before throwing, was:
+
+```text
+std::__throw_system_error(int)
+pv::data::LogicSegment::~LogicSegment()
+shared_ptr release
+pv::Session::get_samplerate() const
+pv::views::trace::View::update_hover_point()
+pv::views::trace::View::eventFilter(QObject*, QEvent*)
+```
+
+The error argument was 22 (`EINVAL`). Disassembly of the same executable
+shows the destructor's `pthread_mutex_lock` failure leading to that throw.
+The capture thread was in `sr_session_run`, reached from
+`Session::sample_thread_proc`. After inspection, only the paused acquisition
+was resumed: the GUI aborted with native exit `0xC0000409`, verified through
+the original retained process handle. The function names came from the
+executable's COFF symbols; source-line debug information was not available.
+Raw register and heap observations are retained without asserting an
+unverified object/control-block layout or a firmware cause.
+
+The source exposes concurrent container access on this path:
+`get_samplerate()` copies each signal's segment container without
+`data_mutex_`, while the acquisition worker clears the previous containers
+under that mutex. A private candidate adds a guard using the existing
+recursive mutex around the getter. It keeps the segment destructor, data,
+return values and capture/Stop behavior. There is no catch hiding the
+exception, samplerate cache, new option, transport change or reset.
+The existing traversal and vector allocation remain; the read now waits
+for the same critical section used by capture replacement and append.
+
+A new regression repeatedly starts a real 32-channel Demo capture while
+the main thread reads the samplerate and processes events. It requests 64
+captures, alternates 200 kS/s and 1 MS/s, checks allowed old/new/fallback
+rates during replacement, joins each capture, and verifies the final rate,
+1,024 samples and absence of a reported capture error. The before/after
+executables use the same new test object; only the Session object differs.
+The old Session version failed on both systems: Linux exited with signal 11
+and a heap-corruption diagnostic; Windows exited with `0xC0000005`.
+These are preserved memory-corruption failures, not a claim that the
+original `EINVAL` throw is deterministically reproduced on every run.
+The candidate passed all 12 `CrashRecovery` cases on Linux and Windows,
+including completion of the 64-restart case on each. Tests ran serially.
+
+The exact candidate Windows GUI then passed a separate, fixed 12-Demo
+full-desktop cohort on one process, without a debugger or WIRE tracing:
+four cycles of native Stop after fresh LOGIC data, external controller
+SIGTERM followed by guarded native Stop and current END, and a finite
+5-million-sample capture at 1 MS/s. Each finite Run was requested at least
+61.5 seconds after host observation of the preceding cancellation's END,
+and each delivered exactly 20,000,000 LOGIC bytes. Each late Stop request
+was refused without a click. Every acquisition had one current HEADER and
+one current END; the GUI stayed alive throughout all twelve acquisitions.
+It subsequently closed with native exit zero. All 37 guest originals were
+copied and SHA256 verified before normal VM shutdown. The six existing
+Windows installed-file hashes remained unchanged.
+
+The candidate GUI SHA256 values are:
+
+| Platform | Exact GUI SHA256 |
+| --- | --- |
+| Linux | `e4414dad2e80e1162f0b2cd5f55741be4dc761e90e47961d6a7c6c39141d248d` |
+| Windows | `51b1e1cc42272626f186c6d38b44e321e66ff56a54c52f4a9a09f4c8405b65e5` |
+
+Windows ran in the nested KVM guest; Linux runs in VMware. Loaded Windows
+GUI/core/C++ wrapper/decoder module hashes matched their pinned values.
+The original GUI's throw and both before-regression failures remain failures.
+The successful candidate Demo cohort does not qualify a physical capture.
+
+**The candidate is not released or installed.** Full-desktop Linux GUI
+validation and a separately bounded Linux/Windows/Linux-return physical
+cohort on the exact candidate binaries are still pending. The reserved
+physical controls are finite Stream captures at 5 MS/s, with unchanged D0
+and D22 sources, native Save/replay, independent RAW-to-LOGIC comparison,
+original kernel order/accounting, temporal witnesses and verified END,
+quiet cleanup and close. No physical capture or source I/O was performed
+for this diagnosis and candidate validation. This report update changes
+no product source or installed binary. It does not resolve AUD-006,
+qualify the pending no-WIRE physical controller, or claim arbitrary
+32-channel electrical continuity.
+
 ## 6 November: Windows no-WIRE preparation is refused after a Demo restart crash
 
 Preparation for the next AUD-002/AUD-006 Windows comparison exposed a GUI
