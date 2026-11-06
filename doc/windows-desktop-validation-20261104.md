@@ -1,5 +1,50 @@
 # Windows desktop capture and replay observations — 4 November 2026
 
+## 6 November follow-up: the 512 KiB stall precedes conversion and storage
+
+Read-only analysis of the closed USB-quantum pair accounts for all 382
+one-MiB and 763 half-MiB callbacks, exact original kernel/RAW packet order,
+counts and offsets, all 400,000,000 accepted LOGIC bytes per case, and all
+38 ten-MiB Segment chunk-fill paths per capture. Four clock/order contracts
+pass; 27 source/trace inputs are pinned. There were zero new acquisitions,
+source I/O, native capture processes or VM boots. The captures were not rerun.
+
+The largest callback argument-to-default-logger timestamp interval is
+2.850–3.130 ms in the positive one-MiB control and **327.711–328.013 ms**
+in the negative half-MiB control. Upper bounds for all other callbacks are
+0.915 ms and 1.724 ms respectively. Bounds use source order and the same
+process monotonic clock, not an assumed alignment to electrical sample zero.
+
+The half-MiB outlier is callback 355, zero based, RAW offset 186,122,240 B.
+It advances LOGIC to 186,646,528 B and does not fill a ten-MiB chunk.
+In `receive_transfer`, the argument clock is sampled before calling the
+logger. Default `sr_logv` writes the initial `sr: ` prefix with `fputs` before
+sampling its timestamp. Status handling, payload logging, RAW output,
+conversion, LOGIC logging, feed write and Segment append follow that call.
+Thus the long interval precedes that packet's conversion and storage.
+It includes logging dispatch/initial prefix output and possible descheduling;
+it is not measured CPU time or an isolated blocked-write, FILE-lock, disk,
+scheduler, allocator or VMware diagnosis. Background pressure is not excluded.
+
+The corresponding kernel completion-to-resubmission gap is 329.254 ms.
+Both D0 fault brackets arrive after the outlier logger timestamp; the first
+faulty completion arrives 3.899–4.067 ms later. Kernel clock origins use all
+completion, command and synchronous-read brackets and reject empty
+intersections without fitting the outlier. Kernel realtime mapping assumes
+no incompatible realtime step; the monotonic delay bounds are separate.
+This chronology is compatible with a service delay preceding corruption,
+without proving the replay's cause or identifying an internal physical splice.
+The older eight-IN negative has different fault/gap chronology and is not
+reclassified by this one-IN analysis.
+
+The result rules out same-packet Segment chunk growth as an explanation for
+time already elapsed before its conversion/feed/append. It does not justify
+a Segment workaround, logger fix or firmware claim. AUD006 remains open.
+Linux VMware trace analysis changes no common product code or installed
+binary and adds no Windows or arbitrary 32-channel electrical qualification.
+The previous END/quiet/source-close proofs and 5 MS/s return remain intact;
+15 analysis artifacts and the original 245 evidence files are frozen locally.
+
 ## 6 November follow-up: 512 KiB requests also reproduce the 128 MiB replay
 
 A new Linux-only necessity experiment asks whether a 1 MiB active USB IN
