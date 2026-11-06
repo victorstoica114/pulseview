@@ -173,3 +173,82 @@ arbitrary electrical continuity on 32 channels: D0/D22 remain the only temporal
 witnesses. The negative and partial evidence are retained privately. A new
 Windows/common-product qualification is not claimed for this Linux-specific
 diagnostic. No speculative product correction is justified by this result.
+
+## Follow-up: source timing and the actual Linux transition — 6 November 2026
+
+The Linux GUI has now completed continuous 50 MS/s → native Stop → finite
+50 MS/s / 400 MB in one hardware Session. Storage and replay are exact, but
+**the full predeclared finite witness profile remains unqualified**: its last
+complete UART message ends 21.13752 ms before the capture boundary, exceeding
+the fixed 20 ms limit. The refusal is retained without changing its criterion
+or repeating the capture. No product implementation or installation changed.
+
+Two separately bounded cohorts distinguish source timing and a LAB preparation
+error. Both used the same installed GUI/core/libraries, 32 channels, 1.6 V,
+Stream, one capture, no trigger/windows and unchanged source/wiring/firmware.
+Linux runs in VMware; the DLA stayed on USB 3-2 at 5,000 Mb/s. Windows stayed off.
+
+The first cohort changed only the GUI witness's first-command scheduling floor
+from 20 to 5 ms after observation of the current kernel ARM completion. Its
+prediction, fixed before I/O, required the first full UART message to move
+10–20 ms earlier and track the host-command shift within 5 ms. The first START
+moved from the preserved 30.94888 ms to 15.37486 ms, earlier by 15.57402 ms;
+host/GPIO shift disagreement was 0.695465 ms. Its 202 MB continuous capture
+and reserved 100 MB / 5 MS/s return passed. This supports source-phase
+sensitivity across runs; it establishes neither absolute propagation latency
+nor a device/GUI cause for the historical failures.
+
+Its finite Run was refused **before HEADER, ARM or USB requests**: optional
+WIRE tracing creates an exclusive file, and the LAB adapter had left its
+previous pathname occupied. This was a LAB preparation error. The native GUI
+returned exit 0, two finalized passive scopes contained zero requests/loss,
+and the source remained owned until verified recovery. That cohort closed
+without retry: three native Run requests including the refusal, two actual
+ARM acquisitions and zero Windows boots. Its negative remains preserved.
+
+The minimal correction changes only LAB file management. After proven END,
+kernel quiet, source close and an exact RAW copy, it verifies that the native
+descriptor is closed, preserves the original inode/hash under a fresh name,
+and frees only the exclusive pathname. Product `O_EXCL` stays unchanged.
+Nineteen lifecycle, phase and real filesystem/CLI contracts plus 25 unchanged
+witness-profile checks passed before the corrected adapter's physical test.
+All 41 preparation inputs were frozen. The second cohort used exactly three
+actual acquisitions, zero retries and zero Windows boots:
+
+| Phase | Saved LOGIC | Consecutive valid CRC | Result |
+| --- | --- | --- | --- |
+| Continuous 50 MS/s, native Stop | 202,375,168 B | 50, `761101..761150` | Original data profile passed; first START 14.70646 ms. |
+| Same-session finite 50 MS/s | 400,000,000 B | 99, `762101..762199` | Native complete, exact storage; strict final boundary failed at 21.13752 ms > 20 ms. |
+| Reserved CAPI return, 5 MS/s | 100,000,000 B | 50, `763101..763150` | Data, END/quiet, source close and native exit passed. |
+
+Independent kernel/RAW conversion matches every accepted byte on all 32
+channels. Continuous kernel payload is 203,423,744 B: RAW 202,375,168 B plus
+1,048,576 retained active worker bytes. Finite kernel and RAW are both
+400,556,032 B; the 556,032 B beyond the accepted prefix are retained. D0 has
+zero bad periods in all phases. Two independent STOP-aware UART decoders agree.
+The first diagnostic inode and archive remain unchanged after the finite Run.
+
+The finite tail contains the partial prefix `ECHO USBSEQ-76220`; its next
+observed byte cannot complete STOP validation before EOF. Candidate command `762200` follows
+source order and matches the prefix, but its full counter/CRC is unverified.
+It is **not counted as a 100th valid message**. The observed last-message
+start gap, 22.007440 ms, is consistent with the corresponding host-write gap,
+22.026781 ms. This explains the stricter final-boundary gate's sensitivity
+to the paced witness; it does not demonstrate acquisition loss.
+
+A separate integer containment analysis checks every possible origin of the
+historical 44.119040 ms target window. Each of the 97,794,049 contained finite
+windows includes a complete fresh CRC message, as do all 48,387,841 origins in
+the continuous capture. Exact-edge and one-sample-hole negatives and an
+independent exhaustive small-case oracle pass. This supplemental result does
+not override the failed 20 ms profile or guarantee arbitrary electrical
+continuity on all channels. D0/D22 remain the electrical witnesses.
+
+Native Open/Save As preserves every payload and metadata member of the new
+202 MB and 400 MB archives and a copy of the earlier source-phase archive;
+all originals remain unchanged. The original GUI process returned exit 0.
+Sources were held through each actual END and finalized kernel ownership/quiet.
+The DLA/source are free and Windows is off. No reset, flash or hub operation
+occurred. The corrected LAB handoff and native transition lifecycle are
+verified; the strict finite profile and general AUD006/AUD022 remain open.
+No new Windows/common-product qualification or transport correction is claimed.
