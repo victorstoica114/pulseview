@@ -1,5 +1,81 @@
 # Windows desktop capture and replay observations — 4 November 2026
 
+## 7 November follow-up: one kernel IN does not match receiver buffering
+
+A read-only audit of five retained50MS/s/400MB captures distinguishes kernel
+request depth from RAW-result buffering and frontend coupling. Zero new captures,
+serial commands, native GUI executions or Windows boots. The existing source,
+firmware uncertainty and VMware Linux/nested-KVM Windows context are preserved.
+
+The WCH source has two RAW-result slots and one synchronous SDK read at a time.
+It publishes a result FIFO and can read into the other slot while main processes
+the previous result; a full two-slot queue applies backpressure. In the private
+one-IN Linux diagnostic cores, the callback decodes, synchronously sends LOGIC
+and returns from consumers before resubmitting its RAW transfer. These are RAW
+slots, not total application allocations. The INFO candidate leaves the worker,
+logger and session source bytes unchanged.
+
+The old Windows DEBUG/no-WIRE GUI evidence has383 consecutive native reads,
+382 LOGIC packets totalling400000000B and one1048576B unconsumed result. Counts
+and32B prefixes match the ordered active kernel requests. The same-process
+worker and default logger use GLib monotonic time; the logger subtracts one
+fixed startup integer E. Read-return-before-announcement and two-slot FIFO reuse
+give E=[101794904,101800990]us, without aligning Windows time to Linux kernel time.
+The reuse bound follows because read i+2 cannot start before the previous
+buffer's synchronous send/release has finished.
+
+Across all6087 feasible common epochs, the next SDK read had started before the
+previous LOGIC announcement at all382 boundaries; at381 it was still active at
+that timestamp. Read331 remains ambiguous as to activity at the LOGIC instant.
+All382 next-read intervals overlap some of the main path between current read
+and LOGIC announcements. The joint summed marker overlap is112114..112782us
+using one E throughout; independently minimized rows give only a looser112094us
+bound. These timestamps precede completed logger/Qt/storage callbacks. They do
+not measure storage overlap, CPU cost, speedup or physical USB utilization.
+The newer INFO capture lacks per-read timestamps: overlap there is not newly
+measured or fabricated from missing records.
+
+All four full2048B Stop/setup/ARM/finalStop commands, including framing, CRC and
+zero padding, are byte-identical across the five observations. Entire captured
+USB scopes differ: the Linux scopes also retain a512B identification request
+and512BDL32 reply before initial Stop. Those originals are saved separately;
+their absence from the recorded Windows Run slices says nothing about earlier
+GUI discovery outside those slices. Equal capture commands do not prove equal
+device state, physical arrival timing, mode history or FIFO occupancy.
+
+| Retained case | Active reads | First IN submit minus ARM completion(us) | IN pending at ARM completion | Preserved witness result |
+|---|---:|---:|---:|---|
+| Linux1MiB | 382 | -567 | 1 | positive,99CRC |
+| Linux512KiB DEBUG | 763 | -415 | 1 | replay,110CRC occurrences/78unique |
+| Linux512KiB WARN | 763 | -315 | 1 | positive,100CRC |
+| Windows DEBUG | 383 | +1042 | 0 | positive,99CRC |
+| Windows INFO | 383 | +824 | 0 | positive,99CRC |
+
+The start ordering agrees with source: Linux submits before ARM; WCH launches
+its reader after accepted ARM. Original electrical witnesses remain D0/D22 and
+all earlier strict-profile refusals retain their verdicts. These observations
+also differ in frontend, quantum, logging, trace and history; they are not a
+paired causal intervention or a new cross-OS throughput comparison.
+
+19 contracts pass:12 parser/epoch/overlap contracts with1000 exhausted small
+domains, plus7 command-original/mutation checks. An independent checker exhausts
+all6087 actual epochs at every one of382 boundaries, reproducing the per-row
+bounds and the joint aggregate. The first script refused the extra Linux
+identification request rather than silently dropping it; its source/failure
+and the explicit classification correction are retained. All52 pinned original
+inputs and46 frozen analysis files are intact; product1248 and installed Linux
+binaries/launchers are unchanged. Windows files are retained originals, not
+rechecked through a new boot. Pure offline analysis runs on Linux; no common or
+Windows product code changes require a new platform/hardware run here.
+
+Kernel maximum depth1 is insufficient to match application pipelines. Future
+experiments need explicit RAW-result capacity and next-read/ARM/frontend
+accounting. This finding neither attributes replay to buffering nor justifies
+a Linux reader redesign. No closed cohort is repeated, no private image is
+promoted, and no cause, product fix or new rate qualification is claimed.
+AUD006 remains open. Private details: `artifacts/receiver-pipeline-20261107/REVIEW.md`.
+
+
 ## 6 November follow-up: finite INFO3 GUI route qualified; AUD006 remains open
 
 The private INFO lifecycle probe from the preceding software report now has a qualified finite
