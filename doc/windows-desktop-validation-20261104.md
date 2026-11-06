@@ -1,5 +1,98 @@
 # Windows desktop capture and replay observations — 4 November 2026
 
+## 6 November follow-up: finite INFO3 GUI route qualified; AUD006 remains open
+
+The private INFO lifecycle probe from the preceding software report now has a qualified finite
+Windows GUI route. Exactly three new captures, zero retries and one Windows
+boot were completed: private-core Linux5M control, Windows50M GUI, installed-core
+Linux5M return. The sourcev8, wires and DLA USB3 path stayed unchanged. Linux is
+in VMware; Windows22000 is in nested KVM. DLA firmware remains unknown/unqueried.
+No flash, FPGA change, USB reset, hub action or product install was performed.
+
+The observer binds the original CreateProcess HANDLE identity, PID/creation
+FILETIME, executable hash, session1 and the four actually mapped module hashes.
+The original native-file launcher implementation is unchanged; an appended
+helper queries its existing HANDLE. The read-only observer uses synchronized
+process waits, so an actual exit259 cannot masquerade as STILL_ACTIVE. Its DLA
+profile requires the unchanged51b GUI and private a17 core/75aa CXX, plus the
+existing decoder and WCH SDK hashes; synthetic Python producers cannot qualify
+as hardware evidence.
+
+Before Run it binds the log file HANDLE/volume/index and EOF, retaining the old
+prefix. GO refuses intervening append, replacement, truncation or prefix changes.
+Current bytes and coalesced following bytes are conserved separately, including
+rejected chunks. Thirty-seven Linux binding contracts and twelve native Windows
+software cases pass, covering stale frames, identity/hash failures, EOF, timeout,
+partial tails and exit259. The Windows positives are explicitly synthetic software
+fixtures with the real private DLL loaded, zero acquisition/serial access.
+An initial PowerShell-path refusal happened before launching a test child;
+its evidence and the corrected absolute-path harness are retained.
+
+Twenty-six further controller checks exercise its actual reader/finalizer with
+injected failures. Source release requires both current backend END and independent
+original kernel Stop/quiet in the same ARM scope. Reader/process exit, a deadline,
+synthetic evidence, an old process or GUI exit alone cannot release the source.
+There is no live per-packet FLOW at INFO3 and no blind Run/Stop-toggle action on
+timeout. These are software guards, not electrical fault-recovery qualification.
+
+The physical Windows run used finite Stream50MS/s/100Msamples400MB, all32 channels,
+1.6V, no trigger, one1MiB IN, INFO3 and no WIRE. READY bound the72B pre-Run prefix;
+the997 new bytes contain exactly one current HEADER/Stop/worker/END/Stopped.
+The real following tail is0B; synthetic tests separately cover partial tails.
+The full original stderr, including subsequent file-replay output, is retained.
+Native END reports100000000 samples, complete/error-free/result0, pending0 and
+two quiet reads. The source remains owned through native END and independent
+kernel finalization. All253live+3preflight ACKs are unique and ordered; the
+original GUI and controller exit with zero.
+
+Native Save/Open/SaveAs preserve400000000B,96chunks and metadata exactly.
+Independent all32 conversion from401604608B of original active kernel data
+equals both saved payloads. The entire1604608B active surplus is retained;
+the worker's1048576B unconsumed counter is distinct. D0 has zero deviations,
+periods49..51 and edge distances43/45 samples. Both STOP-aware decoders agree
+on99 consecutive CRC778101..778199. All97794049 origins of the fixed44.119040ms
+window contain a complete message. A final partial UART frame extends beyond
+capture EOF and is preserved/excluded, not counted as a valid STOP/CRC message.
+All32 equality validates conversion/storage; electrical continuity witnesses
+remain limited to D0/D22.
+
+The last SaveAs screenshot still showed15% progress; CtrlQ preceded a separate
+visual-completion check. The original exit0 and closed archive were obtained
+before reading it, and ZIP CRC, full400MB payload and exact metadata equality
+subsequently passed. Visual SaveAs completion is not claimed; no Save or capture
+retry was used. Twenty-six closed Windows originals are copied and size/SHA/
+archive verified before protected detach and normal shutdown.
+
+Both Linux5M/100MB controls pass all32 kernel/feed/Segment equality, zero D0
+deviations and50 consecutive CRC each:777101..777150 and779101..779150.
+Each retains100663296 active kernel bytes including663296B surplus. The reference
+uses the original CAPI+Qt Segment helper/private8fa core and checks both INFO
+records against accepted native counts; its helper still uses DEBUG4. It is
+not a Linux INFO-only GUI test and does not load libsigrokcxx. The return uses
+the installed84 core/original helper. END/quiet and finalized monitors precede
+source close; original native/controller exits are zero.
+
+Windows ARM-to-last-active-RAW completion is2786.746ms:2331.308ms with an IN
+pending and455.438ms without one, longest gap11.640ms. This excludes final
+callback, settle/cleanup and Save; it is not CPU cost, physical USB utilization
+or FIFO occupancy. The existing2s retirement hold remains visible and unchanged.
+
+The325 physical-cohort and438 adapter files are frozen; all1667 original prepared
+inputs, additional Windows pins and the prior161-file software preparation remain
+intact. Eight installed Windows files,1248 primary product records and installed
+Linux binaries/launchers are unchanged. Windows is off, DLA3-2 is still5000Mb/s,
+and the source2-1.3/ttyUSB1 is free. Details are retained privately in
+`artifacts/gui-info-physical-20261106/REVIEW.md` and
+`artifacts/gui-info-adapter-20261106/REVIEW.md`.
+
+Only the declared private finite INFO3 GUI lifecycle route is qualified.
+Continuous mode, manual Stop and electrical fault recovery require separate
+gates. This single positive is not a paired causal experiment: it does not show
+that logging causes, prevents or fixes the earlier128MiB replay. Older failures
+and strict20/30ms profiles retain their verdicts. No private image is promoted,
+no product fix or global high-rate qualification is claimed; AUD006 remains open.
+
+
 ## 6 November follow-up: replay without a long initial-prefix fputs call
 
 The failed parent-polling observation was reproduced in software: while the
