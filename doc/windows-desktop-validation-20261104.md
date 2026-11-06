@@ -1,5 +1,127 @@
 # Windows desktop capture and replay observations — 4 November 2026
 
+## 6 November follow-up: protect the samplerate snapshot during capture replacement
+
+The existing-mutex correction in `Session::get_samplerate()` has completed
+its Linux and Windows validation gates. The getter now holds the same
+recursive `data_mutex_` used when the capture worker clears and appends
+segment containers. This prevents the unprotected segment-container copy
+identified in the debugger investigation below. The product change is two
+added lines, including its comment; a 38-line regression exercises 64 real
+Demo capture replacements while the main thread reads the samplerate.
+No destructor, transport, firmware, FPGA, cancellation or END behavior is
+changed. The existing vector allocation and traversal remain; the getter
+can wait for the existing capture-data critical section. This is not a
+claim that every segment-container API is generally thread-safe.
+
+The retained before-regression failures on Linux and Windows and the
+original Windows `EINVAL` throw remain failures. With the correction,
+all 12 `CrashRecovery` cases passed on each OS. The exact Windows GUI
+passed twelve Demo acquisitions in four Stop / external-SIGTERM-cancel /
+finite cycles, with the finite Run at least 61.5 seconds after the preceding
+cancel END. The exact Linux GUI additionally passed native Stop
+(13,052,108 LOGIC bytes), external controller SIGTERM followed by guarded
+Stop (16,019,868 bytes), and a finite 20,000,000-byte capture after the same
+61.5-second gate. The late Stop after each finite END was refused without
+a click. Both actual desktop processes closed with native exit zero.
+An earlier Linux preflight stopped before any Run because the desktop was
+locked; its failed preflight is preserved separately from the resumed GUI's
+native exit and successful Demo results.
+
+A separate fixed hardware cohort then used exactly three acquisitions,
+with zero retries and one Windows boot: Linux control, Windows, Linux
+return. The plan was amended from 25 to 50 million samples **before any
+physical I/O**, because the native GUI exposes fixed sample-count presets.
+All three requested 50 million samples at 5 MS/s: finite Stream mode,
+32 channels, 1.6 V threshold, one capture, no trigger and no stream windows.
+The DLA remained `1a86:5537`, USB path `3-2`, negotiated 5,000 Mb/s. Linux
+ran in VMware; Windows ran in its nested KVM guest using the WCH driver.
+Only one OS owned the DLA at a time. There was no reset, hub power cycle,
+rewiring or firmware change. The existing source v8 remained D0 = 1 MHz
+and D22 = ordered CRC UART, with 10 Hz commands during acquisition.
+
+| Physical phase | Native LOGIC bytes | D0 bad periods | Consecutive CRC messages | Independently STOP-checked UART bytes |
+| --- | ---: | ---: | --- | ---: |
+| Linux control | 200,000,000 | 0 | 99: 653101–653199 | 2,772 |
+| Windows | 200,000,000 | 0 | 100: 654101–654200 | 2,800 |
+| Linux return | 200,000,000 | 0 | 99: 655101–655199 | 2,772 |
+
+The acceptance criterion was fixed at 100 ± 1 CRC messages before the runs.
+D0 periods were 4–6 samples on all three captures. Both independent UART
+decoders agreed on every STOP-checked byte, with no unchecked EOF frame.
+The observed message-start interval ranges were 95.8832–102.1978 ms on
+Linux control and 95.3706–103.6762 ms on Windows; these observations did
+not retune the acceptance criteria.
+
+Each acquisition retained 200,278,016 decoder-input RAW bytes, including
+278,016 bytes beyond the accepted LOGIC length. Original-order kernel
+payload accounting matched all RAW bytes; on Windows it also accounted
+for the separate 1,048,576-byte worker-unconsumed payload, for a total of
+201,326,592 bytes. An independent RAW-to-LOGIC implementation matched
+every byte of the native 200 MB export on all 32 channels. The surplus
+and the worker-unconsumed data were retained separately, not silently
+used to repair or extend the accepted capture. D0 and D22 provide the
+stated temporal witnesses; this does not establish arbitrary electrical
+continuity on every channel.
+
+The source serial port stayed owned until current native END and finalized
+kernel quiet/ownership checks both passed. Windows source commands began
+only after observation of the original complete kernel Stop/setup/ARM
+prefix and successful ARM completion, checked against the predeclared
+packet hashes. HEADER, a timer or the WIRE ARM log did not authorize it.
+The unchanged Windows core's two-second Stream retirement hold is not a
+device-ready acknowledgment. These captures used WIRE tracing for retained
+RAW and the legacy native END observer; they do not qualify the separate
+controller without WIRE tracing.
+
+Native Save, Open and Save As were checked on the same retained capture
+on each platform. Every qualified export and re-export contained 48 chunks
+and exactly 200,000,000 LOGIC bytes, with byte-identical data and metadata.
+The Open log had one current HEADER and END and no new DLA Run. All three
+physical GUI processes closed with native exit zero through their retained
+original process owner/handle. All 34 Windows guest originals were copied
+and hash-verified before normal DLA detach and VM shutdown. The source and
+USB owners were then verified free. Installed binaries were left unchanged.
+
+**Windows export failure retained:** the first Windows Save reported
+`Renaming temporary file failed: Permission denied` and left a valid but
+partial ZIP containing 117,440,512 LOGIC bytes. A private lab observer was
+opening that ZIP while Save was still active. A controlled Win32 test on
+copies confirmed that an ordinary ZIP reader can block replacement rename
+with error 5; the precise handle responsible for the original failure was
+not traced. A GUI diagnostic using an already-existing copied destination
+failed differently (`File already exists`), so it is not a clean reproduction
+of the initial rename failure. Both failures and their partial files remain
+preserved. A distinct Save As to a fresh destination, with no reader until
+the native progress dialog closed, produced the complete verified 200 MB
+export and successful native Open/Save As round trip. No acquisition was
+repeated and the partial original was not overwritten or counted as a
+successful Save. A separate live-log .NET reader also refused sharing;
+the frozen original log was independently checked after native GUI exit.
+The samplerate mutex change does not claim to fix these file-access cases.
+
+The exact qualified GUI executables are:
+
+| Platform | SHA256 |
+| --- | --- |
+| Linux | `e4414dad2e80e1162f0b2cd5f55741be4dc761e90e47961d6a7c6c39141d248d` |
+| Windows | `51b1e1cc42272626f186c6d38b44e321e66ff56a54c52f4a9a09f4c8405b65e5` |
+
+Loaded core/C++ wrapper/decoder modules and the Windows WCH module matched
+their pinned hashes. All 416 candidate source files remained unchanged
+from the builds through final review. The primary working tree's 1,248-file
+baseline, the private core's 477-file source manifest, and the six installed
+Windows files remained unchanged. Review covered the shared recursive lock,
+RAII exits, callback/join lifetime, allocation cost, cancellation and retained
+negative cases. Private captures, vendor binaries, VM material and credentials
+are not part of the source publication.
+
+This follow-up supersedes the pending Linux/physical qualification status
+in the historical entry below. It qualifies this samplerate snapshot fix
+and the stated 5 MS/s controls. It does **not** resolve AUD006, the preserved
+Windows 50 MS/s continuity/replay failure, or the pending physical controller
+without WIRE tracing. The installed GUI executables have not been replaced.
+
 ## 6 November update: the Demo restart throw is localized; the snapshot candidate remains unqualified
 
 The restart failure reported below was subsequently captured in the original
