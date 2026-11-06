@@ -1,5 +1,103 @@
 # Windows desktop capture and replay observations — 4 November 2026
 
+## 6 November: fresh Linux control rejects before Windows; low-rate return passes
+
+After the DLA reappeared in the Linux guest, a **new, bounded Linux cohort**
+performed exactly two acquisitions, with zero physical retries and zero Windows
+boots. The fresh 50 MS/s control failed integrity, so the proposed Windows work
+was canceled. The one reserved 5 MS/s return passed. Earlier closed cohorts and
+their original verdicts remain unchanged; no product fix or release
+qualification follows from this run.
+
+The environment was Manjaro Linux 7.2.9-1-MANJARO inside VMware. DLA
+`1a86:5537` was at USB `3-2`, bus/address `3/3`, negotiated 5 Gb/s; the separate
+CH340 source was identified by `bcdDevice=8134` at `2-1.3`, not a generic serial
+alias. Both were free before and after each phase; Windows stayed off. The
+unchanged v8 source reported 1 MHz/50% D0, camera enabled and SD disabled. D22
+carried numbered, CRC-protected UART messages at nominal 100 Hz for the dense
+phase and 10 Hz for the return. The controller kept the source open through
+actual END/quiet cleanup/native process exit, then checked STATUS and closed it.
+There was no reset, hub cycle, flash, firmware or wiring change; the DLA firmware
+revision was not interrogated in this run.
+
+The fixed Linux helper `db7c255b` used the unchanged installed core `84c0c7da`,
+32 channels, 1.6 V, finite Stream and no trigger. Independent conversion of the
+RAW prefix covering each accepted LOGIC byte matched feed and actual Segment
+storage. Kernel parsing
+verified original completion/submission order and conservation of every positive
+IN payload, including separately quarantined surplus. Native completion and
+byte counts therefore describe storage and shutdown, not electrical continuity.
+
+| Phase | Accepted LOGIC / RAW bytes | Electrical result |
+| --- | --- | --- |
+| Linux 50 MS/s, 100M samples | 400,000,000 / 400,556,032 | **Rejected:** four D0 anomalies, UART frame errors and numbered-message loss/replay |
+| Reserved Linux 5 MS/s, 25M samples | 100,000,000 / 100,663,296 | Passed: D0 periods 4–6, initial/final boundaries 3/0 samples, 50 consecutive CRC messages `999101..999150`, independent decoders equal |
+
+Both native captures reported complete, one HEADER/END, quiet cleanup, no error,
+exit 0 and source close after END. In the dense phase D0 instead had periods
+39, 33, 31 and 47 at samples 51,656,665; 51,656,704; 67,108,833; and 67,108,864
+(nominal period 50, permitted deviation one). Both independent UART decoders
+recovered the **same 197 valid CRC records but only 168 unique identifiers**:
+the forward step is `997201 -> 997270`, then `997299 -> 997233` goes backward.
+Identifiers `997270..997298` occur twice; `997202..997232` never appear within
+the observed identifier span. Their decoded byte streams differ around damaged
+frames; SDK frame-error annotations at samples `51660610..51661045` and
+`51674772..51675207` and all malformed material remain retained. Neither the
+original strict review nor the preplanned STOP-checked V2 contract passes.
+All 388 live host commands `997101..997488`, plus three preflight commands, were
+acknowledged once in order. Host writes/ACKs are not measurements of electrical
+emission count or exact source timing.
+
+A separate read-only review used the already specified displacement **128 MiB**,
+32-byte RAW frames and retained every maximal equal run of at least 1 MiB.
+It found exactly one such run:
+
+```
+RAW[206626816, 268435456) == RAW[340844544, 402653184)
+length: 61,808,640 bytes; displacement: 134,217,728 bytes
+SHA256 of each range:
+24f5f247ca8d5c7f0b91dfb37dd51fc45b661aad03772fc9595861d4f686e849
+```
+
+Of those bytes, **59,155,456 have both copies in accepted LOGIC storage**. The
+remainder of the second range is surplus RAW plus a separate 2,097,152-byte
+unconsumed-active kernel payload; it is a virtual read-only extension, never
+appended to accepted samples. The range ends at the limit of the retained
+positive stream, not a proven end of a longer repetition. The preceding full
+32-byte frame differs, with eight trailing bytes equal. The first full-frame
+boundary falls in the first two anomalous D0 brackets. There are **29 complete
+same-numbered CRC pairs**, `997270..997298`, separated by 33,554,432 samples.
+A separate `struct/mmap/hashlib` parser verifies both selected range digests
+directly in the original 384 positive kernel IN completions, totaling
+402,653,184 bytes (796 records/398 closed URBs). The repeated bytes precede
+conversion, storage and derived-file analysis.
+
+Kernel request accounting observed maximum depth eight, a 3.748832 s
+ARM-to-last-accepted-RAW window and 1.455928 s without pending IN requests in
+that window. Its longest such interval was 559.303 ms, **after the completions
+already containing all four D0 anomalies**. No deliberate read pause was added.
+These host request intervals do not align electrical sample time and do not
+isolate observer/storage/scheduling cost or the internal loss/replay mechanism.
+The 128 MiB equality does not determine physical copy direction, buffer capacity,
+source/FPGA/bridge/VMware cause, or integrity of arbitrary signals on all channels.
+
+The initial preparation refusal is preserved: after the reboot `usbmon` was
+absent, so the passive reader failed before ARM or any witness command. Loading
+the existing kernel module repaired that prerequisite before the first physical
+attempt. A later offline analysis initially assumed the Windows sidecar filename;
+that failed attempt and script remain retained, and only the derived analysis
+was corrected to the preserved Linux sidecar. No acquisition, native helper or
+SDK process was repeated for these corrections.
+
+Private evidence is retained in `fresh-linux-control-20261106`: the fixed plan,
+initial preflight and repair, original manifests, both capture/END/source/kernel
+records, strict and V2 refusals, low-rate return, anomaly review, fixed-displacement
+review, independent kernel digests and final review. All 1,248 product files,
+HEAD/status/diffs and Linux installed hashes remain unchanged; all 408 frontend
+sources match the public base. Only this report is published. AUD-002/AUD-006,
+Windows 50 MS/s and the global release gate remain open/unqualified. This cohort
+is closed; it cannot be retried or used as a passed dense-source qualification.
+
 ## Isolated OR/PW evaluator checked on Windows and Linux — 6 November 2026
 
 AUD-004 now has a bounded Windows **file-replay** check of the current
