@@ -1968,6 +1968,44 @@ BOOST_AUTO_TEST_CASE(replacement_capture_discards_saved_file_association)
 	BOOST_CHECK(session.save_path().isEmpty());
 }
 
+BOOST_AUTO_TEST_CASE(samplerate_reads_survive_capture_replacement)
+{
+	application();
+	auto context = sigrok::Context::create();
+	auto device = context->drivers().at("demo")->scan({
+		{sigrok::ConfigKey::NUM_LOGIC_CHANNELS, Glib::Variant<gint32>::create(32)},
+		{sigrok::ConfigKey::NUM_ANALOG_CHANNELS, Glib::Variant<gint32>::create(0)},
+	}).at(0);
+	pv::DeviceManager manager(context, "", false);
+	pv::Session session(manager, "samplerate during restart");
+	session.set_device(std::make_shared<pv::devices::HardwareDevice>(context, device));
+	device->config_set(sigrok::ConfigKey::LIMIT_SAMPLES, Glib::Variant<guint64>::create(1024));
+
+	unsigned reads = 0;
+	for (unsigned capture = 0; capture < 64; ++capture) {
+		const uint64_t rate = capture % 2 ? 1000000 : 200000;
+		device->config_set(sigrok::ConfigKey::SAMPLERATE, Glib::Variant<guint64>::create(rate));
+		QString error;
+		session.start_capture([&](QString message) { error = message; });
+		QElapsedTimer deadline;
+		deadline.start();
+		do {
+			// Hover/view reads can overlap the worker replacing the old capture.
+			const double observed = session.get_samplerate();
+			BOOST_CHECK(observed == 1 || observed == 200000 || observed == 1000000);
+			++reads;
+			QApplication::processEvents();
+		} while (session.get_capture_state() != pv::Session::Stopped && deadline.elapsed() < 2000);
+		const bool finished = session.get_capture_state() == pv::Session::Stopped;
+		session.stop_capture();
+		BOOST_REQUIRE(finished);
+		BOOST_REQUIRE(error.isEmpty());
+		BOOST_CHECK_EQUAL(session.get_samplerate(), double(rate));
+		BOOST_CHECK_EQUAL(session.get_segment_sample_count(0), 1024);
+	}
+	BOOST_CHECK_GE(reads, 64);
+}
+
 BOOST_AUTO_TEST_CASE(replacement_device_discards_saved_file_association)
 {
 	Fixture f;
