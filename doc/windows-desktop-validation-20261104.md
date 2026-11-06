@@ -2706,3 +2706,87 @@ before handover. USB and serial ownership were released. Existing product
 sources, dirty work, installed binaries and the Windows launcher were preserved.
 Raw captures, source logs, USB traces, desktop images and VM credentials stay
 private; this publication contains only the reviewed report.
+
+## 6 November: cumulative one-IN receiver service from four closed captures
+
+An offline ledger now accounts for all **2671 callbacks and 2667 resubmission
+gaps** in the four original one-IN, 50 MS/s, 400 MB accepted-LOGIC captures.
+There were **zero new acquisitions, source commands or VM boots**. These are
+Linux VMware observations; Windows KVM was not used and no common product code
+changed. The original DLA path was 3-2 at 5000 Mb/s, with the same v8 source
+and wires. Firmware was unknown/unqueried. The helper is the db7 C API plus Qt
+Segment helper; it does not load libsigrokcxx. Private cores remain 064f
+(1 MiB) and f497 (512 KiB), with b889 initial-prefix observation in the last
+two cases and the separate sampler only in the fourth.
+
+The receiver window is **kernel ARM completion to the final positive active
+RAW completion**. It partitions exactly into intervals with an IN request
+pending and completion-to-next-submit gaps:
+
+| Original case | Callbacks | Receiver window ms | IN pending ms | No IN pending ms |
+| --- | ---: | ---: | ---: | ---: |
+| 1 MiB necessity control, witnesses pass | 382 | 2918.709 | 2315.473 | 603.236 |
+| 512 KiB control, replay negative | 763 | 3413.370 | 2343.160 | 1070.210 |
+| 512 KiB prefix observer, replay negative | 763 | 3337.916 | 2340.692 | 997.224 |
+| 512 KiB independent sampler, replay negative | 763 | 3156.482 | 2336.832 | 819.650 |
+
+Original request order, depth one and absence of hidden zero-byte active IN
+requests are checked. Full RAW totals remain 400556032 B and 400031744 B,
+respectively; surplus is preserved. The last callback's service lies outside
+this receiver window and is retained explicitly, never assigned zero. Setup,
+shutdown and save time are outside it as well. There is no proportional
+trimming of the last request's duration.
+
+Each closed gap is divided in source order: **K**, kernel completion to
+callback timestamp argument; **A**, callback argument to payload argument;
+**PL**, payload argument to payload logger timestamp; **B**, payload logger
+timestamp to LOGIC logger timestamp; **C**, LOGIC timestamp to next submit.
+All entries below are cumulative elapsed milliseconds:
+
+| Phase | 1 MiB | 512 KiB | Prefix observer | Independent sampler |
+| --- | ---: | ---: | ---: | ---: |
+| K | 184.359–203.409 | 182.244–231.774 | 192.591–234.501 | 182.654–229.136 |
+| A | 18.603 | 357.865 | 212.854 | 37.662 |
+| PL | 1.686–20.736 | 2.362–54.940 | 5.340–51.822 | 5.139–57.717 |
+| B | 160.753 | 211.457 | 232.886 | 241.172 |
+| C | 218.785–237.835 | 263.704–316.282 | 307.071–353.553 | 300.445–353.023 |
+
+**The extrema in different cells are correlated and must not be added as
+simultaneous bounds.** Unknown wire/logger epochs remain a joint feasible
+polygon constrained by all callback, command and synchronous-read brackets
+and source GLib order. Aggregate affine forms are summed before bounding;
+epoch coefficients cancel exactly, conserving each gap and the entire
+window. Cross-kernel quantization allowance is 1 µs. This constant-offset
+clock model is compatible with all retained brackets; it is not an independent
+guarantee against every clock adjustment. Existing prefix-observer epoch
+brackets agree but do not selectively narrow only the observed cases.
+
+A contains the callback logging/dispatch path; B contains RAW writing,
+conversion and the next logger prefix; C contains LOGIC logging, feed/Segment
+storage and return/resubmit. These intervals **do not isolate CPU, allocation,
+logging or write-syscall cost**. All 38 Segment chunk-fill callbacks per case
+remain identified. Conservative budgets through the first containing D0-fault
+completion exclude service of that callback; they do not establish an exact
+electrical splice or a host-clock sample-zero epoch.
+
+The passing necessity control also receives over 2.918709 s, longer than the
+nominal 2 s sampling duration. Consequently, receipt slope below nominal
+sample payload rate alone does not diagnose loss or imply a FIFO capacity or
+overflow threshold. Pending-request time includes possible device, bridge,
+kernel and VM waits; it is **not physical USB wire utilization**. In the
+independent-sampler replay, the previously bounded individual no-IN gaps
+(at most 7.654 ms) nevertheless total 819.650 ms. Cumulative service remains
+an open hypothesis, not a demonstrated cause. Different quanta and auxiliary
+observers make this an observational comparison, not an isolated intervention.
+
+Seven contracts pass, including an independent exhaustive small-domain clock
+oracle and a correlated-sum counterexample; the read-only closure guard checks
+CSV/byte continuity and exact conservation. A generator-reuse error caught
+by the first contract run was corrected before actual-data analysis, with
+the failed run preserved. All 51 pinned inputs, original 245/145/157-file
+cohort manifests and the 1248-file product/installation baseline are intact.
+Local evidence is `artifacts/receiver-service-ledger-20261106/` (23 frozen
+files); captures remain private. There is **no product fix, new rate
+qualification or arbitrary 32-channel electrical guarantee; AUD006 remains
+open**. A distinct DEBUG-logging necessity test first needs a quiet helper
+path that preserves the RAW oracle and ARM/source/END/quiet/closure evidence.
