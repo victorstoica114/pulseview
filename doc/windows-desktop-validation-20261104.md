@@ -1,5 +1,93 @@
 # Windows desktop capture and replay observations — 4 November 2026
 
+## 6 November: host service boundaries in the retained Linux traces
+
+A separate **read-only comparison** of the fresh negative dense capture and the
+historical dense input qualified by the corrected V2 review localizes host-side
+delays without another acquisition, native probe process, source command or Windows
+boot. The historical R1 original live verdict remains negative; its later derived
+qualification is not substituted for the fresh failure. Both inputs used the
+same helper `db7c255b`, active core `84c0c7da` and exact current Segment source
+`b03fa259`, but came from different boots/USB paths. This is an observational
+comparison, not a controlled performance intervention or CPU profile.
+
+The review independently parses every original USB record, validates all
+382 accepted 1 MiB callback ordinals/offsets against retained accounting and
+checks the eight initial requests plus 381 resubmissions in FIFO callback
+order. It retains every packet row. All 38 packets crossing a 10 MiB Segment
+boundary are classified by byte count; the other 343 resubmitted packets are
+ordinary. The final, non-resubmitted packet and teardown are excluded from the
+following service totals.
+
+The driver calls `wire_trace_write`, conversion and `sr_session_send` before
+resubmitting each transfer. In this private helper the LOGIC consumer writes the
+exact feed and appends to Segment synchronously. Segment growth allocates the
+next chunk and a temporary twice-chunk headroom block, touches that temporary
+block, then publishes the next chunk. Those source paths are verified, but the
+recorded traces do **not** time allocation, feed I/O or Segment independently.
+
+| Recorded host wall-time boundary | Historical derived-positive input | Fresh negative input |
+| --- | --- | --- |
+| Callback argument evaluation to resubmission, sum of 381 service intervals | 405.533–429.917 ms | 3330.830–3351.404 ms |
+| RAW-payload log timestamp to LOGIC log timestamp, median of 343 ordinary packets | 0.414 ms | 2.940 ms |
+| LOGIC log timestamp to resubmission, median of 38 growth packets | 2.986–3.220 ms | 29.946–30.192 ms |
+| LOGIC log timestamp to resubmission, median of 343 ordinary packets | 0.099–0.333 ms | 2.596–2.842 ms |
+
+The ranges conservatively bound clock origins using synchronous-read brackets,
+command-submit and callback-completion inequalities, with outward microsecond
+rounding. The wire-epoch constraint intersections are 64 µs wide for the old run
+and 54 µs for the fresh run. Default log-clock origin uncertainty is retained;
+no fit to a large delay is used. The model assumes no inconsistent host realtime
+step within either run. The values are host wall time, not CPU time or electrical
+sample time. LOGIC-to-resubmit includes the remaining log operation, consumer,
+core/libusb work and possible descheduling. Packet completion-to-callback
+latencies overlap across queued requests and must not be summed as CPU work.
+More than one stage is slower in the fresh run; the table does not establish
+that the temporary allocation alone caused loss or justify removing it.
+
+One interval can be narrowed further using the two clocks already present in
+each log line. Callback 249 (zero based), RAW offset `261095424`, evaluated its completion-log
+argument at wire-relative `2359268 µs`; the default logger's displayed timestamp
+is `00:02.910585`. The next RAW-payload argument is `2909829 µs`, giving a
+550.561 ms argument-to-payload interval. Of this, **550.205–550.510 ms occurred
+before the default logger acquired the timestamp**, with every other accepted
+callback's corresponding upper bound at most 0.379 ms. The historical input's
+largest such upper bound is 0.405 ms.
+
+The verified default logger calls `fputs("sr: ", stderr)` before acquiring that
+timestamp. Thus this particular long interval precedes RAW writing, conversion,
+LOGIC delivery, Segment growth, and log-body formatting/flush after the
+timestamp. It includes logger dispatch, the initial stderr prefix operation and
+possible descheduling. It does not identify a blocked write, FILE lock, scheduler
+or VM pause. Measuring only the subsequent RAW/LOGIC timestamps would misplace
+this delay in the pipeline.
+
+The time ordering must distinguish this logger interval from the later period
+with no pending USB requests. The first two anomalous D0 periods were already
+received approximately 505 ms before callback 249 evaluated its argument. The
+third anomalous-period bracket spans a completion before that argument and one
+5.326–5.380 ms after it; the fourth is in that later completion. All those
+completions precede the end of the logger interval. The previously reported
+559.303 ms interval **without pending IN requests begins at that later
+completion**, after all four fault-containing completions. Therefore the long
+logger interval cannot explain the first fault; the evidence does not establish
+its causal relationship to the later faults. Kernel receipt times are not
+electrical production times. An initial extra check assuming all four faults
+preceded the logger argument was correctly rejected and remains preserved; the
+final review retains this more precise ordering. The preceding report's
+statement about the zero-pending interval remains unchanged and consistent.
+
+Private evidence `host-service-boundaries-20261106` contains the frozen plan and
+input hashes, complete per-packet CSVs, source/build checks, both clock-bound
+sets, all 382 prefix intervals per input, the initial refused ordering check and
+the independent final review. Original capture artifacts, all 1,248 product
+files/HEAD/status/diffs and installed Linux hashes are unchanged. Windows remains
+off; this Linux-only evidence makes no Windows claim. Only documentation is
+published. No workaround, buffering option, allocation policy or product logging
+change is promoted. The fresh 50 MS/s failure and the passing 5 MS/s return
+remain the latest physical results; AUD-002/AUD-006 and release remain
+unqualified.
+
 ## 6 November: fresh Linux control rejects before Windows; low-rate return passes
 
 After the DLA reappeared in the Linux guest, a **new, bounded Linux cohort**
