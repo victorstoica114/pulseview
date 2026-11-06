@@ -1,5 +1,69 @@
 # Windows desktop capture and replay observations — 4 November 2026
 
+## 6 November follow-up: 512 KiB requests also reproduce the 128 MiB replay
+
+A new Linux-only necessity experiment asks whether a 1 MiB active USB IN
+request is required for the observed RAW replay at a 128 MiB displacement.
+Two private cores were built from the 477 verified sources of the currently
+used runtime. Both have one pending IN request; their only source difference
+is `TRANSFER_SIZE` 1 MiB versus 512 KiB. Neither core was installed or promoted.
+GNU checks, two existing helper ABI/feed/Segment selftests and 15 lab guard
+contracts passed before I/O. The detector was first checked against the
+original negative, including four local independent/SDK full-STOP anchors.
+
+The fixed plan allowed at most four acquisitions, no retries and no Windows
+boots: normal 1 MiB, normal 512 KiB, a 700 ms injected pause only if both
+normal controls passed, then the reserved 5 MS/s return. There were exactly
+three acquisitions. The normal 512 KiB capture already reproduced the replay,
+so the injected pause was omitted. Linux ran in VMware; Windows KVM stayed
+off. The same DLA `1a86:5537`, USB `3-2`, negotiated 5,000 Mb/s, source v8,
+1 MHz D0, numbered CRC UART D22, wiring, firmware and hub were retained.
+
+| Phase | Pending IN / request size | LOGIC bytes | D0 faults | Fresh CRC result |
+| --- | --- | ---: | ---: | --- |
+| Normal 50 MS/s | 1 / 1,048,576 B | 400,000,000 | 0 | 99 consecutive: 764101–764199 |
+| Normal 50 MS/s | 1 / 524,288 B | 400,000,000 | 2 | 109 occurrences, 79 unique; replay |
+| Reserved 5 MS/s return | 8 / 1,048,576 B | 100,000,000 | 0 | 50 consecutive: 767101–767150 |
+
+High-rate geometry was finite Stream, 100 million samples, 32 channels,
+1.6 V, no trigger/windows. Native RAW exactly equals the original-order
+active kernel payload: 400,556,032 B for 1 MiB and 400,031,744 B for 512 KiB.
+Surpluses beyond accepted LOGIC were retained. Independent all-channel RAW
+conversion equals feed and actual Qt Segment storage in every phase. The
+negative is already present in kernel payloads, before that conversion and
+storage; this does not distinguish DLA, bridge or virtualized host USB path.
+
+For 512 KiB, accepted RAW `[186703872,265782272)` equals
+`[320921600,400000000)`: **79,078,400 B at +134,217,728 B**. Both ranges hash to
+`c3f32f1f1ebc4566c1c38141344c568e91bf5026abd6364622a2b7a63147c4c9`.
+Thirty fresh CRC pairs occur in this interval. The deterministic first two,
+765171 and 765172, additionally pass local independent and SDK decoding with
+full final STOP high for both copies. The full decoders also agree: the
+sequence jumps 765146→765171, then 765200→765168; 765171–765200 occur twice.
+D0 periods 14 and 35 samples violate 50 ± 1. The first D0 bracket is inside
+an original 512 KiB completion, around offset 57,344 B; the other crosses
+the 256 MiB RAW boundary. These brackets do not identify an exact internal
+physical splice. A 329.254 ms no-pending-IN gap precedes the first faulty
+completion, but its cause was not isolated and no pause was injected.
+
+All source commands, including three preflight and 148/173/51 live commands,
+have exactly one ordered CRC ACK per phase. Each phase retains real native
+HEADER/END, cleanup, final Stop, two sequential quiet reads, all USB requests
+closed and a finalized observer before source ownership was released.
+Original native and controller process waits both returned zero. Device identity and free ownership were
+rechecked. Raw captures, commercial firmware and credentials remain private.
+
+**Limited conclusion:** a 1 MiB request is not necessary for this
+128 MiB-displacement replay in the tested setup. The positive 1 MiB control
+is not a fix, and the failing 512 KiB variant must not be promoted. AUD006
+and general high-rate qualification remain open. This Linux lab experiment
+changes no common product code and adds no Windows qualification. D0/D22
+are electrical witnesses, not proof of arbitrary 32-channel continuity.
+The predeclared necessity-test contract includes a full fresh CRC in every
+contained 44.119040 ms window; it does not override historical 20/30 ms
+profile refusals. Product sources, dirty work and installed binaries remain
+unchanged; 245 evidence files and 1,475 prepared inputs are frozen locally.
+
 ## 6 November follow-up: the matched WIRE-on capture also passes
 
 A new bounded comparison changed the existing Windows WIRE instrumentation
