@@ -1,5 +1,102 @@
 # Windows desktop capture and replay observations — 4 November 2026
 
+## Dense Linux witness: original refusal retained, private review corrected — 6 November 2026
+
+The dense-witness cohort on 4 November stopped after its first qualification
+failure. It is **closed at two physical Linux acquisitions, zero retries and
+zero Windows boots**: one dense 50 MS/s acquisition and the reserved 5 MS/s
+return. The planned Windows acquisition was cancelled. A subsequent, separately
+specified offline review qualifies the retained Linux input under a corrected
+private comparison contract. **This is a derived qualification, not a pass of
+the original live plan or a product fix.** The original failed reviews and all
+raw inputs remain unchanged.
+
+The source, wiring and product were unchanged: source STATUS v8,
+1 MHz/50% PWM, camera=1, sd=0; 32 channels, 1.6 V, finite Stream, no trigger or
+Stream windows, Captures=1. Linux runs in VMware; the planned Windows test is
+in nested KVM. At acquisition, DLA `1a86:5537` was at USB 4-2/dev16, negotiated
+5000 Mb/s; the bcdDevice=8134 CH340 source was at 3-1.2. The exact source
+firmware is unavailable here; STATUS and command ACKs do not establish the
+number or latency of electrical emissions.
+
+| Retained phase | LOGIC / RAW bytes | Numbered CRC messages | Original verdict |
+| --- | --- | --- | --- |
+| Linux dense, 50 MS/s, 100 M samples, 10 ms commands | 400,000,000 / 400,556,032 | 197 consecutive, 992101–992297 | Qualification refused |
+| Reserved Linux return, 5 MS/s, 25 M samples, 100 ms commands | 100,000,000 / 100,663,296 | 50 consecutive, 994101–994150 | Passed |
+
+Both acquisitions preserve independent RAW conversion equal to the entire
+accepted LOGIC feed and actual Segment, and exact kernel completion order and
+byte conservation: 796 and 224 kernel records, respectively. D0 has no rejected
+periods: 49–51 samples with initial/final fragments 43/32 at 50 MS/s, and
+4–6 with fragments 4/1 at 5 MS/s. Both have one header and real END, native
+exit 0, complete metadata with empty error, quiet cleanup and source closure
+after END. These storage checks and D0/D22 witnesses do not certify arbitrary
+electrical integrity on all 32 channels.
+
+The original dense refusal exposed two private reviewer assumptions:
+
+* **DATA annotation is not a validated STOP.** The independent decoder retained
+  5542 bytes, whereas the SDK UART decoder emitted 5543 DATA annotations. The
+  first 5542 bytes are identical. The extra `0x32` belongs to the final unfinished
+  UART frame: START edge at sample 99,996,249, expected STOP sample
+  100,000,371–100,000,372, beyond the 100,000,000-sample input. The SDK emits DATA
+  before it samples STOP. The corrected private checker compares bytes only
+  after an independently observed valid STOP, retains every SDK annotation and
+  the unchecked EOF frame, and excludes that frame from complete CRC messages.
+  It rejects warnings, interior unfinished frames, byte disagreement and an
+  alleged EOF frame whose STOP should have been observable. No captured sample,
+  byte, annotation or decoder implementation was changed.
+* **Host pacing was checked beyond the observed identifier span.** All 232 live
+  commands 992101–992332 were distinct, ordered and ACKed. The original
+  all-command check retained a 34.677226 ms host write-start gap between
+  992324 and 992325. Neither identifier is in the observed 992101–992297 span.
+  The revised contract checks that span plus one available adjacent command at
+  each boundary, here 992101–992298, while retaining and reporting every outside
+  gap. This identifies scope by command number; it does not align the host
+  clock to electrical capture time or measure UART emission latency.
+
+Under this explicit revised contract, both decoders agree on 5542
+STOP-checked bytes, including the retained incomplete textual suffix, and all
+197 complete CRC messages remain fresh, known and consecutive. GPIO message
+start gaps are 5.5049–13.6315 ms, mean 10.016528 ms; corresponding host write-start
+gaps are 5.498378–13.607653 ms, mean 10.020963 ms. The first and last UART DATA
+boundaries are 23.44996 ms from the beginning and 10.91184 ms from the end.
+The original numerical thresholds remain unchanged: 195–201 complete messages,
+GPIO gaps 2–20 ms/mean 9–11 ms, host gaps 5–20 ms, and boundary coverage
+30/20 ms. The changed contracts and original refusal are recorded separately.
+
+Private offline qualification covers nine UART cases (six actual SDK software
+fixtures and three derived annotation faults) and ten host-cadence cases.
+It rejects interior loss, repeated or unknown identifiers, blind boundaries,
+in-span or adjacent host gaps, bad STOP and missing interior STOP. The original
+all-command refusal is reproduced. A single additional SDK decode of the
+original Linux input supplies START/DATA/STOP annotations. None of these
+offline processes opens the source or a capture device. The separate
+source-only batch of 100 commands, all ACKed, remains control-port evidence
+only; it is not itself electrical cadence qualification.
+
+On resumption on 6 November, the prepared separate Windows-dense plan had
+started **zero acquisitions and zero VM boots**. Fresh read-only enumeration
+found no `1a86:5537`; the visible `77a1:01a2` is Kingst. USB paths have changed,
+so the old identity preflight cannot authorize acquisition. The owner was
+asked to reconnect DLA through the private channel. No hub cycle, reset,
+firmware change or source I/O was performed during this resume. Windows dense
+cadence and continuity remain untested; the earlier Windows 50 MS/s negative,
+partial RAW repetition and AUD002/AUD006 remain unresolved. Windows50M and
+release qualification remain false.
+
+Evidence is retained privately under `dense-witness-20261104` (original plan,
+source-only/physical runs, failed reviews, closure and original manifest),
+`dense-witness-review-v2-20261104` (fixed offline plan, fixtures, stop proof and
+explicit derived qualification), and `dense-witness-report-20261106` (fresh
+inventory, frozen-input verification and publication review). The prepared
+`dense-witness-v2-20261104` physical tools were not executed. Final review
+rechecks all 1248 product files, local HEAD/status/diffs and Linux installed
+hashes. Windows installed files were last checked in the prior completed
+cohort; this offline resume does not claim a new Windows runtime check.
+Only this report is published; the private checker, captures, commercial
+firmware/SDK, VM disks and credentials are not publication material.
+
 ## Update: offline128MiB overlap localization in the native50M negative — 4 November 2026
 
 A fixed offline follow-up finds a **smaller exact RAW equality interval** in the
