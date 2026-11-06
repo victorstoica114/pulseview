@@ -118,3 +118,58 @@ The product sources, installed files and launchers remain unchanged. There was
 no Windows boot, physical capture or source-port I/O in this audit. The VM stays
 off and no electrical qualification is added. The original activation evidence,
 its preparation failures and the AUD006/Buffer/high-rate limits remain intact.
+
+## Follow-up: Linux native continuous Stop — 6 November 2026
+
+The installed Linux GUI was tested at 50 MS/s in continuous Stream mode, with
+32 channels, 1.6 V, one capture and no trigger or stream windows. This is a new
+Linux ViewQt/Stop investigation, separate from the closed Linux CAPI and Windows
+finite cohorts. Linux runs in VMware; the DLA stayed at USB3-2/5000Mb/s. The
+source, wiring, firmware, installed GUI and libraries were unchanged. Optional
+RAW tracing and a passive kernel observer were enabled. No Windows boot occurred.
+
+The plan allowed at most three acquisitions, zero retries: continuous native
+Stop after 200 MB, then finite 400 MB in the same device/session only if the first
+data gate passed, followed by a reserved CAPI 5 MS/s return after GUI close.
+Eight lifecycle/Stop/order contracts and 25 profile checks passed;28 preparation
+inputs were frozen before I/O. Source commands began 20 ms after the controller
+observed the actual current kernel ARM completion. The source remained owned
+through native END and finalized kernel ownership/quiet, then was closed.
+
+Native Stop was requested at 200,278,016 delivered bytes. Native Save contains
+202,375,168 LOGIC bytes in 49 chunks, with stopped status and empty error.
+Kernel 203,423,744 bytes equal the native RAW plus 1,048,576 retained active
+worker bytes, in original order. Independent conversion matches all saved
+bytes on all 32 channels. D0 has zero bad periods (49–51 samples); two independent
+STOP-aware UART decoders agree on 49 consecutive valid CRC messages,
+754101–754149. The partial EOF frame remains preserved as unchecked.
+
+**The high-rate data gate failed:** the first complete UART message starts at
+30.94888 ms, exceeding the predeclared 30 ms boundary by 0.94888 ms. The final
+message boundary passes at 16.17286 ms. Supplemental full-message coverage is
+bounded by 33.36520 ms, below the historical 44.119040 ms target; this does not
+override the failed initial boundary. No criterion was relaxed and no attempt
+was repeated. This refusal alone does not demonstrate lost/replayed data or
+identify a firmware, transport or GUI cause.
+
+The finite 400 MB phase was therefore **omitted**. The same-device continuous
+to finite transition remains unqualified. The historical zero-data case did
+not occur in this continuous attempt, but remains unexplained. Native Open/Save
+As preserved all members and metadata of the 202 MB archive, with the original
+unchanged; the GUI's original process handle returned exit 0.
+
+After GUI close and free-resource checks, the reserved CAPI 5 MS/s/25 Msample
+return completed 100,000,000 bytes. Independent kernel-prefix/feed/storage
+conversion agrees; D0 has zero bad periods (4–6 samples), and both UART decoders
+agree on 50 consecutive CRC messages,756101–756150. Native helper/controller
+exit 0, END/quiet and source close passed. The cohort closed at **two physical
+acquisitions, zero retries and zero Windows boots**, with USB/serial resources
+free and the current product source/runtime checks unchanged. No reset, flash,
+hub pulse, installation or production-code change was made.
+
+This result adds bounded Stop, storage, replay and recovery evidence. It does
+not qualify the withheld transition, close AUD002/AUD022/AUD006, or establish
+arbitrary electrical continuity on 32 channels: D0/D22 remain the only temporal
+witnesses. The negative and partial evidence are retained privately. A new
+Windows/common-product qualification is not claimed for this Linux-specific
+diagnostic. No speculative product correction is justified by this result.
