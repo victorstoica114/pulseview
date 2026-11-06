@@ -1,5 +1,112 @@
 # Windows desktop capture and replay observations — 4 November 2026
 
+## 6 November follow-up: the matched WIRE-on capture also passes
+
+A new bounded comparison changed the existing Windows WIRE instrumentation
+setting from the qualified no-WIRE case to ON. It retained the exact GUI
+`51b1e1cc42272626f186c6d38b44e321e66ff56a54c52f4a9a09f4c8405b65e5`,
+the same loaded core/C++ wrapper/decoder/WCH hashes, native C# process-handle
+and file-output launcher, 50 Hz witness schedule, and capture configuration.
+All four USB command packet hashes, including setup and ARM, matched the
+qualified no-WIRE capture. WIRE enables its existing synchronous native
+RAW/worker-sidecar output and conditional debug records; those observation
+costs are part of the intended intervention.
+
+The separately frozen plan allowed three acquisitions, zero retries and one
+Windows boot: Linux native CAPI 50 MS/s reference, one Windows GUI 50 MS/s
+capture with WIRE, then Linux native CAPI 5 MS/s return. All three completed.
+Fresh source numbers were checked before I/O. No closed cohort was restarted,
+and no product source, installed binary, transport setting, firmware, FPGA,
+hub power or wiring change was introduced. Linux ran in VMware and Windows
+in nested KVM; only one OS owned the same `1a86:5537` DLA at a time, USB path
+`3-2`, negotiated 5,000 Mb/s. The source remained v8 with D0 = 1 MHz, D22
+numbered CRC UART, camera enabled and SD disabled.
+
+Both 50 MS/s acquisitions requested 100 million samples / 400,000,000 LOGIC
+bytes, finite Stream, 32 channels, 1.6 V, no trigger, one capture and no stream
+windows. Both used a 20 ms source-command period. The Linux return requested
+25 million samples / 100,000,000 bytes at 5 MS/s and the established 100 ms
+source period. The Linux CAPI controls used the unchanged pinned helper and
+core; this does not add Linux GUI 50 MS/s qualification.
+
+| New cohort phase | LOGIC bytes | D0 periods | D0 bad periods | Consecutive CRC messages | STOP-checked UART bytes |
+| --- | ---: | --- | ---: | --- | ---: |
+| Linux CAPI reference, 50 MS/s | 400,000,000 | 49–51 samples | 0 | 99: 704101–704199 | 2,772 |
+| Windows GUI, 50 MS/s, WIRE ON | 400,000,000 | 49–51 samples | 0 | 99: 705101–705199 | 2,772 |
+| Linux CAPI return, 5 MS/s | 100,000,000 | 4–6 samples | 0 | 50: 706101–706150 | 1,400 |
+
+The acceptance bands stayed at 99 ± 3 CRC messages for 50 MS/s and 50 ± 1 for
+the return. Two independent decoders agreed on every STOP-checked byte,
+without an unchecked EOF frame. D0 edge bounds were 32/11, 36/7 and 1/0 samples
+respectively. All source commands and ACKs were retained in order, including
+250 live Windows commands through retirement. The source port stayed owned
+until current native END and finalized independent kernel ownership/quiet
+proof both passed. ARM permission came only from the complete original
+kernel Stop/setup/ARM prefix and successful ARM completion.
+
+The Windows native decoder-input RAW contained 400,556,032 bytes and the
+worker-unconsumed sidecar contained 1,048,576 bytes. Together they matched
+every byte of the original-order active kernel payload, 401,604,608 bytes.
+The accepted 400,000,000-byte prefix independently converted to exactly the
+native Save data. Native Open and Save As preserved every data byte and
+metadata in both 96-chunk exports. Archive readers ran after Save progress
+closed. The original Save was unchanged, Open had one current HEADER and
+END without a new DLA Run, and the actual GUI closed with native exit zero
+through its original process handle. All 23 guest originals were copied
+and SHA256 verified before normal DLA detach and Windows shutdown. The six
+installed Windows file hashes remained unchanged.
+
+All positive kernel payload remained in its original pre-ARM, active and
+post-Stop categories; surplus beyond accepted data was not used to repair
+or extend the capture. Linux reference and return also passed independent
+kernel-prefix/feed/Segment-storage conversion equality, native exit zero
+and cleanup. Their kernel positive totals were 400,556,032 and 100,663,296
+bytes. The final VM was off and USB/source owners were empty. The 21 frozen
+control/analysis inputs and 107 retained original files were hash-checked.
+The primary 1,248-file baseline, 477 private runtime source files, 416 GUI
+candidate files and installed binaries remained unchanged.
+
+The existing host reader and finalization/recovery nodes were retained.
+Before I/O, 102 offline contracts passed: 64 protocol/recovery cases, 25
+unchanged 50 Hz profile cases, and 13 WIRE pin/RAW-conservation cases. The
+latter executed the actual analysis code on a retained real 200 MB RAW plus
+worker sidecar and on explicitly synthetic corruptions. The guest observer
+changed only its fixed WIRE-presence pin; it still obtains END from native
+lifecycle records and never authorizes source release from RAW-file size.
+
+Additional full-message analysis on this Windows capture passed the
+unchanged Linux reference profile: initial full START 29.44342 ms, final
+full STOP gap 5.73098 ms and maximum full message envelope 2.41790 ms.
+A window without a fully contained message was bounded by 31.86088 ms,
+below the known 44.119040 ms historical replay interval. The preceding
+no-WIRE capture's additional strict-edge check remains refused at
+30.79734 ms versus the Linux-only 30 ms limit. Neither the limit nor that
+previous result was changed; these extra checks do not rewrite the frozen
+Windows acceptance criteria.
+
+| Matched Windows observation | WIRE absent | WIRE ON |
+| --- | ---: | ---: |
+| Accepted LOGIC bytes | 400,000,000 | 400,000,000 |
+| Consecutive valid CRC messages | 99 | 99 |
+| D0 bad periods | 0 | 0 |
+| Positive kernel payload bytes | 401,604,608 | 401,604,608 |
+| Active 1 MiB kernel reads | 383 | 383 |
+| ARM completion to Stop completion | 2.851663 s | 2.829225 s |
+| Median native read duration | 6,080 µs | 6,076 µs |
+| Median idle interval between reads | 1,156 µs | 1,124 µs |
+
+Both acquisitions pass under the current exact-GUI/50 Hz configuration.
+Enabling WIRE alone did not reproduce corruption in this one matched pair.
+Fresh counters, separate VM boots and scheduling variation remain nuisance
+differences; these timing observations do not establish a general performance
+improvement or universal cause. The earlier Windows 50 MS/s electrical
+failures remain failures, and AUD006's cause and broader applicability remain
+open. This does not qualify arbitrary electrical continuity on all channels,
+continuous operation, every rate or unrelated mode transitions. No speculative
+data repair, transport workaround or firmware change is justified by this
+result. Private captures, vendor runtimes, VM material and credentials remain
+outside the publication.
+
 ## 6 November follow-up: one Windows 50 MS/s capture passes without WIRE tracing
 
 A new, separately bounded cohort completed after publication of the samplerate
