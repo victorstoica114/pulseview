@@ -1,5 +1,101 @@
 # Windows desktop capture and replay observations — 4 November 2026
 
+## 6 November: Windows no-WIRE preparation is refused after a Demo restart crash
+
+Preparation for the next AUD-002/AUD-006 Windows comparison exposed a GUI
+restart failure before any DLA use. This cohort is **not qualified**: zero
+physical captures, zero source I/O, one Windows boot without DLA assignment,
+and exactly three distinct planned Demo acquisitions with no retry. The
+preceding Linux 50 Hz control remains qualified in its stated scope; it does
+not substitute for the failed Windows preparation. Product code, firmware,
+wiring and installed binaries were not changed.
+
+The old private GUI observer depended on optional WIRE ARM/RAW/sidecar
+records. That dependence was reproduced on preserved Windows originals,
+including an explicitly derived log with conditional diagnostics removed.
+The original Linux kernel guard also correctly refused WCH's different
+geometry. Neither old tool was used to start a physical no-WIRE capture.
+
+New private lab checks separate three facts: successful original kernel ARM
+completion, current native GUI END/worker retirement, and independent WCH
+kernel ownership/quiet. The live ARM prefix reader requires the complete
+original successful Stop/setup/ARM command sequence, valid command CRCs,
+pinned packet hashes and device identity. A partial record, elapsed time,
+GUI HEADER or observer exit cannot assert ARM. The WCH kernel check requires
+serial 1 MiB reads, complete original-order payload accounting, accepted Stop,
+closed ownership and two final sequential empty reads submitted after Stop
+completion. SDK retirement is checked separately in the unconditional native
+WCH terminal record; host empty reads alone are not an SDK ready ACK.
+
+The revised native log observer emits `NATIVE_END`, never ARM or permission
+to release a physical source. Release requires both current native END and
+the independently reviewed WCH kernel proof. It no longer stats optional
+RAW/sidecar files. Data qualification and native Save/replay remain separate.
+The host physical controller is not yet integrated or hardware qualified.
+
+Offline checks passed 43 WCH/END contracts, 27 original ARM-prefix contracts
+and 20 incremental log contracts. Both the preserved Windows 25 MS/s positive
+and 50 MS/s electrical-negative captures have valid completion proofs; their
+data verdicts are unchanged. Additional checks reject concurrent WCH reads
+and missing END from the new real crash. Initial offline fixture/expected
+refusal mismatches are retained; they did not cause hardware retries.
+
+The real Windows tests used the same private, uninstalled GUI `705a2fc1`,
+core `bf0a6c78`, C++ binding `a1fc7442` and decoder `628767ce`, in Session 1.
+The unchanged C# launcher `17d809c7` retained the original CreateProcess
+handle and native stdout/stderr files. WIRE was absent; no WCH DLL was loaded
+for Demo. QEMU retained NoNewPrivs=1/Seccomp=2 and had no DLA peripheral;
+Windows also reported no present DLA. Linux is in VMware, Windows in nested
+KVM. The existing private credential opened the actual desktop without a
+password change or a request for personal intervention.
+
+| Planned Demo case | Observed result |
+| --- | --- |
+| Native Stop, 10 million samples at 200 kHz maximum | Stop was sent after fresh LOGIC and a verified Stop glyph. The initial observer then refused the valid 1,146,916-byte stopped capture because it incorrectly required a multiple of 32 bytes in Demo. This initial live test remains failed. |
+| SIGTERM cancellation, same finite Demo configuration | After the contract correction, external SIGTERM followed actual FLOW. The controller remained alive, sent a guarded native Stop and observed one current HEADER/END with 16,721,972 bytes. This distinct live case passes; the GUI remained alive. |
+| Finite 5 million samples at 1 MHz, expected 20,000,000 bytes, then late-Stop refusal | On the same GUI process, after changing the finite count/rate, the next Run produced one new HEADER, zero LOGIC bytes and no END. The GUI terminated. Neither the finite result nor late-Stop check passed. |
+
+The minimal observer correction is specific to Demo: its 32-channel LOGIC
+unit is 4 bytes and native Stop may end at any sample count. The pinned DLA
+32-byte RAW-frame requirement is unchanged. The corrected Demo rule was
+checked against the retained first stopped capture and four alignment cases,
+then exercised live by the cancellation case. That offline derivation does
+not turn the original live refusal into a passed test, and the first capture
+was not rerun.
+
+The third attempt's original stderr contains an unhandled `std::system_error`
+with `Invalid argument`; the retained native process handle reports exit
+`3221226505` / `0xC0000409`. Windows Application Error/Reporting events 1000
+and 1001 agree on the process and failure. The full stderr suffix after the
+third observer's recorded offset independently has one HEADER and no END;
+the observer's shorter retained log is an exact prefix of that suffix.
+Its previous capture's END was not reused. The guard correctly refused to
+report completion or permission to release a physical source.
+
+The WER `Report.wer` was retained; the temporary dump was already unavailable
+when checked. There is no symbolized throwing frame or confirmed root cause.
+The private GUI's recorded `pv/session.cpp` is byte-identical to the current
+preserved product source, but that does not locate the throw or demonstrate
+the installed GUI's behavior. No source fix, mutex/thread workaround or
+firmware explanation is inferred from this exception message.
+
+All 19 guest original files were copied and verified by size/SHA before
+normal VM shutdown. The six installed Windows file hashes are unchanged.
+The abnormal native exit is preserved explicitly; shutdown is not reported
+as a successful GUI exit. The GUI process and scheduled task had ended,
+the test task was removed, and DLA had never been assigned. Windows is off;
+the Linux DLA/source remain free with the same identities. All 1,248 local
+product files, repository HEAD/status/diffs and Linux installations, plus
+477 active runtime source files, remain intact.
+
+Further physical Windows work is cancelled. The next step is a separately
+bounded Demo-only diagnosis that obtains a native throwing frame/backtrace
+for the restart sequence before another DLA comparison. This preparation
+does not resolve AUD-002/AUD-006, qualify Windows no-WIRE acquisition, or pass
+the global release gate. Private originals and lab checks are retained under
+`artifacts/windows-passive-preparation-20261106/`; captures, crash report,
+private helper/launcher and credentials are not published.
+
 ## 6 November: a separately defined 50 Hz reference passes the Linux control
 
 This is a new reference profile for AUD-002/AUD-006, defined and checked before
