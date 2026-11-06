@@ -2873,3 +2873,64 @@ diagnostic and original kernel oracle, no common product change; Windows KVM
 is untested here. **AUD006 remains open.** The next prerequisite is auditing
 the existing Windows quiet/no-WIRE path with the qualified GUI and independent
 WCH evidence, rather than transferring the Linux result across platforms.
+
+## 6 November: INFO3 GUI/WCH prerequisite, software only
+
+The Windows evidence path can reduce per-packet DEBUG emission while keeping
+rare native lifecycle records at **INFO3**. **WARN2 remains unsupported by
+this LAB observer**, since it hides the existing WCH Stop/retirement records.
+Product logging defaults are unchanged.
+
+A private copy of the original 477-source core adds **two INFO record sites**
+in `fnirsi-dla32/api.c`: after successful HEADER delivery and after the END
+delivery call returns. HEADER reports the configured rate/mask/unitsize/limit;
+END reports the existing driver sample counter, status/error flag and actual
+return code. A record label alone is not success: the guard requires result
+zero. There is no new state, per-packet work, recorder or runtime option.
+These logger calls can block or reenter; zero overhead is not assumed.
+The source change is confined to private builds and is not installed.
+
+The finite all32 guard requires unique current HEADER/Stop/worker/END/Stopped
+records in order, correct configuration/counts and successful native WCH
+retirement. Independent original kernel ownership/quiet and unconsumed-byte
+bounds remain mandatory before releasing the source. The backend sample
+counter **does not prove GUI acceptance or electrical integrity**; native
+Save and independent kernel-to-LOGIC comparison remain separate requirements.
+
+**47 protocol/ownership/framing contracts pass on each OS**, including every
+byte split, missing/duplicated/reordered records, failed delivery, partial
+timeout closure and preservation of coalesced later GUI bytes. Their positive
+fixture is explicitly synthetic, not a native hardware observation. The
+observer has no live per-packet FLOW progress and does not establish freshness
+without a recorded pre-Run offset and original process/module identity.
+
+Linux VMware and Windows KVM builds use the same 477-source manifest, with
+only the API probe additions. **122 native C checks per OS and both C++ context
+cleanup suites pass**; intentional negative cleanup messages are retained.
+Three actual Linux Demo cases and four distinct Windows Demo cases preserve
+independent counter bytes. The Windows 2 Msamples/8 MB case verifies the actual
+live loaded private core, SHA256
+`a17b662763d7e74e6e046a5e6b5c945c826c914cc160e329335aba2f8876fafc`.
+Demo output cannot satisfy the DLA native guard.
+
+The initial Windows bootstrap missed UCRT64's `pkg.m4`; correcting
+`ACLOCAL_PATH` preserved the same source. Two errors in my ABI command
+(separator, then global/channel-group scope) were correctly refused and
+preserved before the corrected run passed. Windows totals are twelve CLI
+starts: ten successful Demo runs and two rejected commands, not physical
+retries. Guards and acceptance criteria were not relaxed.
+
+There were **zero physical acquisitions, source operations, DLA assignments
+or native GUI executions**. One Windows boot was used for build/tests and
+normally shut down. All 52 copied Windows originals match SHA256/size and ZIP
+CRC; eight installed Windows GUI/DLL/launcher files and the Linux 1248-file
+product/install baseline remain unchanged. DLA/source are free. Local evidence
+is `artifacts/gui-info-lifecycle-20261106/` (161 frozen files); private images
+and captures are not published.
+
+**Actual DLA emission and GUI/WCH integration remain UNQUALIFIED.** The next
+step is the finite GUI adapter with fresh original PID/image/module hashes
+and log offset, retained trailing bytes, current kernel ARM/Stop/quiet and
+native Save evidence, before a distinct fixed physical qualification plan.
+No private image is promoted, no rate is newly qualified and **AUD006 remains
+open**.
