@@ -1,5 +1,110 @@
 # Windows desktop capture and replay observations — 4 November 2026
 
+## 6 November: bounded Linux control without synchronous WIRE tracing
+
+A new cohort performed **two Linux acquisitions, zero retries and zero Windows
+boots**. The only configured intervention was leaving the existing optional
+`FNIRSI_DLA32_WIRE_TRACE` unset. The exact same helper `db7c255b`, installed core
+`84c0c7da`, Segment, finite Stream geometry, 32 channels, 1.6 V, source firmware,
+wiring and command cadence were retained. The helper still used DBG4. Disabling
+that option removes both synchronous RAW-file writes and conditional WIRE debug
+messages together; it is not an isolated measurement of either cost, or a
+product change. Passive usbmon, exact-feed logging, Segment storage and ordinary
+session debug logging remained enabled.
+
+The 50 MS/s capture has a **positive bounded D0/CRC/storage result**, while its
+**overall dense-input qualification is refused**. The original 20 ms pacing
+limits were exceeded by one host interval and one measured UART interval. The
+thresholds and refusal are preserved; the capture was not retried, and Windows
+was not started. The one reserved 5 MS/s return passed. Earlier negative results
+remain negative; this run does not resolve AUD-002/AUD-006 or establish a general
+high-rate guarantee.
+
+Linux was Manjaro 7.2.9-1-MANJARO inside VMware; DLA `1a86:5537` stayed at
+`3-2`, bus/address `3/3`, negotiated 5 Gb/s. CH340 source `bcdDevice=8134` stayed
+at `2-1.3`. Source STATUS confirmed unchanged v8, D0 1 MHz/50%, camera enabled
+and SD disabled. DTR/RTS remained false. There was no reset, hub cycle, flash,
+firmware update, wiring change or Windows credential access. The DLA firmware
+revision was not interrogated. Both devices were free before and after phases.
+
+The private Linux END/accounting guard was qualified **before physical I/O**:
+48 contracts cover actual retained kernel inputs, metadata/lifecycle errors,
+missing or failed Stop, unmatched/duplicated requests, missing quiet reads,
+observer loss, reordered/truncated payloads and corrupted storage. A separate
+bit-by-bit oracle validates the compact conversion fixture. Kernel-prefix
+conversion also matches the original feed and actual Segment for the retained
+400 MB negative capture and 100 MB positive return; recognizing their clean END
+does not turn the earlier electrical failure into a pass. The legacy guard's
+dependency on optional WIRE log lines is reproduced. An initial 47-contract run
+is retained; the final version additionally accepts a clean END with a shorter
+saved prefix after a reported storage failure, while refusing complete-data
+qualification for it. No product code or executable was changed for this guard.
+
+During each new run, native HEADER/END/Stopped, exit and cleanup are checked
+while the source remains open. Only after actual native END does the passive
+observer close; independent parsing then verifies successful Stop, all kernel
+requests closed, and the last two sequential, empty sample reads submitted
+after Stop completion. These are bounded host quietness observations, not a
+device-ready ACK. The source is closed only after that proof and postflight
+STATUS/ACK verification. A missing END/quiet proof holds the source controller
+alive; elapsed time, observer exit and cancellation alone cannot release it.
+
+Without a native WIRE file, the original passive kernel trace supplies the RAW
+reference. Every positive payload remains in its original category and order.
+The reference prefix corresponding to each accepted LOGIC byte is converted
+independently and compared with both exact feed and actual Segment storage.
+Derived `kernel-pre/active/post` files are explicitly labeled; surplus bytes
+remain outside accepted samples. No native callback timestamps or decoded-input
+tail boundary are invented when conditional tracing is absent.
+
+| Phase | Accepted LOGIC | Original positive kernel bytes | Witness result |
+| --- | --- | --- | --- |
+| 50 MS/s, 100M samples | 400,000,000 B | 402,653,184 B | D0 periods 49–51, zero anomalous periods, boundaries 41/45 samples; 198 consecutive valid CRC messages `600101..600298`, both STOP-checked UART decoders equal |
+| Reserved 5 MS/s, 25M samples | 100,000,000 B | 100,663,296 B | D0 periods 4–6, zero anomalous periods, boundaries 1/0 samples; 50 consecutive valid CRC messages `601101..601150`, both decoders equal; overall return passes |
+
+Both natives report complete/exact count, no error/watchdog, one HEADER/END,
+cleanup and exit 0. Independent all32 kernel-prefix/feed/Segment comparison is
+exact. Pre-ARM and post-Stop positive payloads are zero in both phases. The
+active surplus beyond accepted LOGIC is 2,653,184 B for 50 MS/s and 663,296 B for
+the return, retained separately from accepted samples. Without the native WIRE
+trace these are not asserted to be precise native-decoder/unconsumed boundaries.
+The UART decoders agree on all 5,544 and 1,400 valid-STOP bytes respectively,
+with no unchecked EOF frame. This verifies storage conversion on all channels
+and electrical witnesses on D0/D22, not arbitrary32 temporal integrity.
+
+The dense source qualification remains **false**. Within the captured-ID host
+window plus its available adjacent command (`600101..600299`), host write-start
+gaps are 5.335511–20.177397 ms, mean 10.018137 ms. The `600241 -> 600242` gap
+exceeds the predefined 20 ms ceiling; the preceding write/flush itself took
+0.194726 ms. In accepted sample coordinates, UART message-start gaps are
+5.332940–20.222900 ms, mean 10.013705 ms; that maximum also exceeds the original
+20 ms ceiling. First/final UART data bounds are 23.227100/1.673380 ms. All 236
+live commands `600101..600336` plus three preflight commands were acknowledged
+once in order. All source commands, failures and timing outliers remain
+retained. Host writes/ACKs and nominal sample coordinates do not align an
+electrical emission clock or prove emission counts. The specific delay is not
+isolated to serial reads, disk logging, scheduling or a firmware operation.
+
+The native ARM-return-to-last-LOGIC interval was 2.307998 s for the no-WIRE
+50 MS/s run; the preceding traced negative run observed 3.823052 s. These are
+whole-path wall observations in separate runs, not isolated CPU/RAW/logger
+costs or proof of causality. A historical traced capture also had positive
+bounded D0/CRC data under its derived review. The new observation therefore
+neither proves that tracing caused all prior faults nor makes 50 MS/s safe in
+every configuration. The strict input-cadence refusal is not waived for a
+favorable storage/witness result.
+
+Evidence `passive-kernel-control-20261106` retains the pre-I/O plan and unused-ID
+check, both offline guard rounds, all original kernel/source/native files,
+explicitly derived RAW references, independent conversion/UART reviews, exact
+timing violation, real END/kernel quiet/source-close records and final review.
+The cohort is closed at two acquisitions/zero retries; it cannot be reopened.
+All 1,248 product files, local HEAD/status/diffs, installed Linux hashes and the
+477-source active runtime manifest remain preserved. Windows stays off. Only
+this report is published. Dense-source, Windows high-rate and global release
+qualification remain open; no private guard, controller, capture or commercial
+firmware is promoted into the product.
+
 ## 6 November: host service boundaries in the retained Linux traces
 
 A separate **read-only comparison** of the fresh negative dense capture and the
