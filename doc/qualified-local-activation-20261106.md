@@ -82,3 +82,39 @@ primary-source changes. Historical baselines and closed cohorts remain frozen;
 their old installed-GUI expectations must not be rewritten or rerun for green
 results. Private captures, diagnostic helpers, registry/settings backups,
 commercial files, VM data and credentials are not publication inputs.
+
+## Follow-up: direction of the Parallel decoder difference
+
+A file-path audit on 6 November resolves the earlier decoder mismatch. The
+installed Linux decoder and the Windows launcher's frontend default already
+contain the published [Parallel width correction](https://github.com/sigrokproject/libsigrokdecode/pull/140),
+commit `cddc02f3339aee7dc260402d2b572f25c1efbf2c`. Their `parallel/pd.py` SHA256 is
+`5168e5254af9b359358a46e306ffbb81b6932c65cbbed3752a7c1f223ab4c511`, verified
+against that public source. The separate private EOF qualification SDK prefix
+retains the older one-byte implementation, SHA256
+`e2622edf990d08c48e03d9b8a190646f17853e3491c9750152f66bd36f5ddee3`.
+The only source difference is sizing binary items from the configured bus width
+instead of always using one byte. No product decoder or launcher change is
+needed; copying the SDK folder's old decoder into the frontend would regress it.
+
+The Windows before/after deployment manifests sampled both trees and confirmed
+this was their only non-cache file difference. Retained real-Windows SDK
+compatibility evidence uses the exact current decoder source and decoder DLL
+`628767ce4f2f9d19185860a4ee02917a9f069e28bf7ad2fc666d3cbe633de0b3`.
+Its 23 corrected cases cover widths1–16, four sparse maps, leading zeroes on a
+16-bit bus and both word endianness settings. The saved input, expected output,
+actual output and stderr files were rechecked against the recorded results.
+This reuses frozen Windows evidence; it is not a new guest execution or a new
+native GUI decoder-path qualification.
+
+A new file-only run used the actual installed Linux decoder folder and decoder
+library `ff037c439927f3a78ec54ea4ac80075afc3e0efb84bf1ff180336980afe8eecb`,
+with the qualified CLI. All 23 outputs exactly match the independent expected
+bytes and the retained Windows outputs; all exits are zero with empty stderr.
+A separate 16-bit control selecting the old private SDK decoder, with the same
+CLI and library, reproduces OverflowError and exits1. That negative is preserved.
+
+The product sources, installed files and launchers remain unchanged. There was
+no Windows boot, physical capture or source-port I/O in this audit. The VM stays
+off and no electrical qualification is added. The original activation evidence,
+its preparation failures and the AUD006/Buffer/high-rate limits remain intact.
