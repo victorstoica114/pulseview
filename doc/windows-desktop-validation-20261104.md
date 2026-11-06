@@ -2790,3 +2790,86 @@ files); captures remain private. There is **no product fix, new rate
 qualification or arbitrary 32-channel electrical guarantee; AUD006 remains
 open**. A distinct DEBUG-logging necessity test first needs a quiet helper
 path that preserves the RAW oracle and ARM/source/END/quiet/closure evidence.
+
+## 6 November: native quiet lifecycle witness and conditional DEBUG/WARN pair
+
+A distinct Linux VMware cohort is closed: **three acquisitions, zero retries
+and zero Windows boots**. This tests DEBUG text emission separately from
+unchanged unbuffered RAW writing. The DLA remained on USB 3-2 at 5000 Mb/s;
+the v8 source, wires, firmware and hub were unchanged. DLA firmware remained
+unknown/unqueried. There was no injected pause, interposer or live sampler.
+
+The old LAB guard first reproduced a dependency on DEBUG lifecycle text.
+A private copy of the db7 C API plus Qt Segment helper now records six scalar
+callback-order counters and an invalid-order flag. It adds no per-callback
+file writes, allocations or timestamps; its shared nonzero CPU overhead was
+not isolated. The two helpers compile identical source and original storage
+objects with only `SR_LOG_DBG` versus `SR_LOG_WARN`. Both high-rate phases
+use the same private f497 core, one 512 KiB IN, finite 50 MS/s/400 MB,
+32 channels/1.6 V/no trigger, and the predeclared 50 Hz fresh source markers.
+They do not load libsigrokcxx. WARN was conditional on a corroborated current
+DEBUG replay, with no retry. The final reserved phase uses original db7 and
+installed core 84 at 5 MS/s/100 MB.
+
+| Phase | Accepted LOGIC bytes | D0 faults | CRC occurrences / unique | Outcome |
+| --- | ---: | ---: | ---: | --- |
+| New witness, DEBUG | 400000000 | 2 | 110 / 78 | Corroborated replay |
+| Same witness, WARN | 400000000 | 0 | 100 / 100 | Fixed finite witness contract passes |
+| Installed original, 5 MS/s return | 100000000 | 0 | 50 / 50 | Reserved return passes |
+
+The DEBUG failure retains D0 periods 15/36 and **90088448 B of accepted RAW
+repeated at +134217728 B**: `[175693824,265782272)` equals
+`[309911552,400000000)`, SHA256
+`112948a23f2262f4f2cb6d7f70dbc552b465077d5e43113acefb2b1974687bcf`.
+Fresh pairs 774169/774170 pass local independent/SDK full-STOP validation in
+both copies. Global STOP decoders also agree, with no unchecked EOF frame.
+The 32 duplicate CRC occurrences remain failures, not repaired data.
+
+WARN preserves **100 consecutive CRC messages, 775101..775200**, D0 periods
+49..51, equal independent/SDK STOP output and no unchecked EOF frame. All
+97794049 contained origins of the fixed 44.119040 ms witness window are
+covered. Historical 20 ms profiles are not replaced or reclassified.
+**WARN stderr is exactly 0 B; DEBUG stderr is 338527 B. RAW writing remains
+enabled in both.** Each full RAW file contains 400031744 B, including the
+31744 B surplus, and equals the complete original active kernel payload in
+order. Independent all32 conversion equals feed and actual Segment storage;
+this does not certify arbitrary 32-channel electrical continuity.
+
+Both new helpers report HEADER ordinal 1, 763 LOGIC packets at ordinals
+2..764, and unique terminal END ordinal 766, with no invalid order; effective
+native levels are 4 and 2. Quiet closure does not fabricate DEBUG text. The
+original reserved-return guard remains strict. The 5 MS/s return preserves
+50 consecutive CRC messages 776101..776150, conversion and END/quiet.
+All source ACKs are unique/in order: 177/151/51 live commands respectively,
+plus three preflight commands per phase. Native/controller original waits
+return zero; END, kernel quiet and observer finalization precede source close.
+DLA/source are free and Windows is off.
+
+| Kernel ARM to final active RAW completion | Window ms | IN pending ms | No-IN sum ms | Largest no-IN gap ms |
+| --- | ---: | ---: | ---: | ---: |
+| DEBUG | 3503.854 | 2341.961 | 1161.893 | 310.488 |
+| WARN | 2970.198 | 2335.187 | 635.011 | 5.721 |
+
+These are recorded kernel budgets, not isolated logging/CPU cost, physical
+USB utilization or FIFO occupancy. Terminal callback work, setup/shutdown
+and save remain outside the window. No fputs interposer was used here: the
+310 ms gap is not an isolated function duration.
+
+The native witness is qualified on these Linux captures. Preparation passes
+33 guards using ten actual callback/Segment sequences, both 20 MiB + 12 B
+storage ABI checks and eight policy guards. The 60 preparation files, 190
+physical evidence files and 1552 inputs are frozen; product 1248 and installed
+modules/launchers are unchanged. Two manifest path-normalization errors,
+before I/O and after closure, are preserved and corrected without changing
+captures or criteria. Private evidence remains local under
+`artifacts/quiet-debug-{preparation,physical}-20261106/`.
+
+**This conditional single ordered pair does not establish DEBUG necessity,
+causal sufficiency or a product fix.** Scheduling, VM/device state and source
+phase remain possible influences. WARN passes this finite necessity-test
+contract; no general high-rate or arbitrary-channel qualification follows.
+The private helper/core is not promoted. Windows exception: Linux/POSIX LAB
+diagnostic and original kernel oracle, no common product change; Windows KVM
+is untested here. **AUD006 remains open.** The next prerequisite is auditing
+the existing Windows quiet/no-WIRE path with the qualified GUI and independent
+WCH evidence, rather than transferring the Linux result across platforms.
