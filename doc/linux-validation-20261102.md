@@ -1,5 +1,34 @@
 # Linux validation, 2 November 2026
 
+## 7 November 2026 — failed limit-case closure and offline first-data review
+
+The interrupted limit-only experiment is now **closed as a failed experiment**, with the original two acquisitions and zero retries unchanged. The 80 MB control passed its declared criteria. The 400 MB phase still has zero accepted LOGIC bytes, native exit1 and no endpoint-quiet proof after its 64 MiB post-Stop drain. Both remaining phases stay canceled. There is no new acquisition, DLA query, drain, hub cycle, firmware change or product fix in this update.
+
+The ESP32 generator was physically disconnected while a USB wiring change was being prepared. Its former USB node disappeared and the old holder's fd3 became a deleted ttyUSB1 descriptor. Native acquisition and the passive reader had already ended, Windows was off and DLA had no USB owner. After checking the original immutable inputs and serial prefixes, the exact controlled holder was checked by PID, startticks, parent, argv, executable and deleted character descriptor, then checked again with a pidfd open. Only this stranded local holder was abandoned through pidfd/SIGKILL. **The original parent Popen wait returned -9; its original tool session exited247.** These abnormal receipts are preserved, not replaced by zero or normal protocol closure.
+
+The original missing run.json, end-confirmed.json, kernel-review.json, monitor-process.json and source-postflight.bin for the failed phase remain missing. Closing the disconnected descriptor does not establish endpoint quietness or qualify any data. The experiment's final136-file evidence set is sealed; the earlier113-file interim snapshot and22 original RAW hashes or serial-prefix checks remain intact. The independently reviewed offline analysis is sealed separately in26 files.
+
+That offline review compares five existing Linux/VMware USB scopes. In every scope, **eight1MiB IN requests were submitted before ARM**. Their full lifetimes must be included; filtering only submissions after ARM would discard these primed requests.
+
+| Existing scope | First positive IN after ARM completion | Active payload including surplus |
+| --- | ---: | ---: |
+| New50MS/s,20Msamples control | 9399us | 80740352B |
+| New50MS/s,100Msamples failure | None | 0B |
+| Earlier400MB INFO A1 | 9277us | 400556032B |
+| Earlier400MB DEBUG B | 9439us | 400556032B |
+| Earlier400MB INFO A2 | 9397us | 400556032B |
+
+In the failed scope, all eight requests remained kernel-visible and outstanding for **3045465us after ARM completion**. They then completed empty/status-2, all before final Stop submission, by533,250,200,141,103,69,35 and9us. The complete ARM-completion-to-Stop-submission interval is3045998us. All positive64MiB belongs to64 new post-Stop reads; it remains diagnostic data, not accepted LOGIC.
+
+Thirty-five original files are pinned to their previous evidence hashes. Two parsers, including an independent fixed-ABI-offset parser, and two independent integrations of request lifetimes agree across all five scopes. Command CRCs, ownership pairing, observer counters and byte conservation agree; the four pre-existing positive kernel reviews also agree on command hashes and active payload totals.
+
+This excludes an absence of submitted kernel-visible IN requests during this particular first-data interval. Outstanding requests do not demonstrate physical bus service, host-controller progress, CPU scheduling or GPIO timing. The three older positive400MB captures are historical context, not newly acquired controls. Firmware, bridge, HCD and VMware causes remain unisolated; neither extending timeouts nor changing request depth is justified by this evidence.
+
+After reconnecting, the ESP32 generator answered one STATUS with its expected v8 configuration and its serial port closed normally. That is a separate readiness observation, not DLA recovery or a new capture qualification. DLA still requires recovery; the new hub/ESP32 arrangement has not been qualified. Linux ran inside VMware, Windows KVM remained off, and no shared product code, installed image or AUD013 candidate was changed or promoted. AUD022, AUD006, AUD026 and AUD027 remain open.
+
+The following interim section retains the state before this actual closure.
+
+
 ## 7 November 2026 — limit-only comparison blocked by first-data stall and nonquiet Stop
 
 A new bounded comparison,after the qualified post-reconnection5MS/s health case below,has reached **two acquisitions with zero retries**. The first50MS/s20Msample80MB control passes. The next phase keeps50MS/s and increases the requested limit to100Msamples400MB;it receives **zero accepted LOGIC bytes**,times out waiting for first data,and cannot prove endpoint quietness after Stop. **Both remaining phases are canceled. The source cohort is still open only for holder cleanup and evidence preservation.** This is a failed,unqualified large-limit case;no product fix or cause is claimed.
