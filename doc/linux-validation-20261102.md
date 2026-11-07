@@ -1,5 +1,31 @@
 # Linux validation, 2 November 2026
 
+## 7 November 2026 — AUD013 standalone checks pass on current Linux/Windows headers
+
+The unchanged rebased completion-compaction candidate passes the declared **standalone Segment software checks on Linux and Windows** with the current headers. Each platform passes53 allocation/completion contracts and three64-frame storage cases. **AUD013 remains a private, partially qualified candidate.** This work does not qualify Windows acquisition, the full Session/View paths or an installed image; no product code or binary is promoted.
+
+Current Segment.cpp is byte-identical to the earlier rebased baseline, SHA256 `b03fa2599caf1e2e40afeb655fa0483fdd8abb2f74c592a4b653a0c278013aef`. The candidate remains `7116da5202701b294e4e3a2b64ed954db09d5b73eb950535f0682a24fa17520c`: optional compaction at completion, nonthrowing replacement allocation and an unused-capacity guard. The current copied headers include SegmentMutex's MinGW destructor behavior. Older Windows results from a different candidate/header set do not replace this qualification. MOC and native C++17 objects were built separately on both OSes with Qt5.15.19.
+
+The frame fixture retains64 completed segments with1024 used bytes each. Baseline observe-mode preserves all data and reports zero compacted tails; baseline require-trim mode exits1 for that specific unmet criterion. The candidate satisfies it with64 compacted tails. Every case exports65536 actual stored bytes; independent Python checks every byte against frame-specific fixture data. All six exports have SHA256 `ffd2a840627958ab0308401a4b4906c9873e5f0a27d6fa319af3d4993cc6bed9`. Metadata, completion state and frame IDs also match. These are generated class inputs, not physical source samples.
+
+| Measurement at64 retained completed frames | Baseline | Candidate |
+| --- | --- | --- |
+| Windows private-commit increase from process preallocation point | 672751616B, about641.586MiB | 180224B,176KiB |
+| Windows handles, before → retained → after frame destruction | 126 →190 →126 | 126 →190 →126 |
+| Linux virtual-address-space increase | 671485952B | 21102592B |
+| Linux RSS increase in this process | 454656B | 266240B |
+
+The Windows commit deltas meet the predefined baseline≥512MiB /candidate≤128MiB criterion for this small-frame case. PrivateUsage is private commit, not working set. Linux virtual address space and RSS remain separate observations; this is not a promised application RSS saving. Handle release is measured before the helper process exits. The separately linked memory helpers use the normal allocator, without fault-injection overrides.
+
+The53 fault contracts comprise31 compaction/append allocation/ownership cases and22 completion, two-held-iterator, allocation-failure, retry and idempotence cases. Accepted bytes and sample counts remain intact, notification counts match and iterator pointers remain valid until release. The fault fixture uses32-byte test chunks to exercise deque boundaries cheaply. The64-frame memory fixture uses production10MiB chunks with only1KiB used in each; this plan does not test every production-sized crossing or unit width.
+
+The first Windows R1 run remains failed overall: its three memory/export cases pass and31 allocation cases report zero failures, then the completion fixture exits1. An isolated default-nothrow routing probe observes the injected throwing-array override called once with its fault consumed on Linux, but zero calls with the fault still armed on this Windows runtime. R2 adds only explicit QA nothrow-array allocation/deallocation overloads that delegate to that injected allocator. The completion assertions are unchanged. Both platforms then pass all53 contracts. Only the QA object is rebuilt; the exact original candidate Segment and MOC objects are reused and hash-checked. R1 source, diagnostics and failure receipts are retained, rather than relabeled a passing trial. Supporting allocator-routing observations and test-process override diagnostics do not establish a general runtime allocator defect or real system-wide OOM recovery.
+
+Linux runs in VMware; Windows runs in nested KVM. There was one Windows boot, with no physical USB passthrough/DLA assignment in the recorded QMP states and guest checks. The standalone helpers invoke no Session, device API or sigrok context, and their direct imports contain no sigrok/libusb/WCH capture library. There were **zero physical acquisitions and zero source operations**. Eight original Windows installed files, all1248 primary source hashes/repository states, installed Linux modules and launchers remain unchanged. Windows was closed normally by ACPI and confirmed off; its original native results were copied and verified before shutdown.
+
+Optional completion compaction still performs an allocation and up to a tail chunk's10MiB copy under the existing mutex, or defers it while iterators are held. This software plan does not measure its isolated CPU cost or sustained acquisition throughput. It does not requalify current full Session/GUI/Math/A2L/decoder consumers, arbitrary concurrent readers, or the earlier failed View50M/first-data trials. Earlier consumer and hardware results retain their original source/configuration scope. Physical Windows and full-path qualification are still required before promoting this candidate. AUD013, AUD022 and the rate/continuity/identification issues remain open; see the [current capture observations](windows-desktop-validation-20261104.md). Private immutable evidence is retained in188 files under `aud013-rebased-software-20261107`; only this verified documentation is published.
+
+
 Windows testing resumed on November 3. See the
 [Windows validation and USB handover report](windows-validation-20261103.md)
 for the completed checks and the additional failed 50 MS/s continuity test.
