@@ -1,5 +1,34 @@
 # Linux validation, 2 November 2026
 
+## 7 November 2026 — AUD013 current Session and consumer software checks pass
+
+The unchanged private compaction candidate now passes the bounded **current-source Session and consumer software checks on Linux and Windows**. Each variant on each OS passes82 frontend regressions, a64-frame Demo series, a between-frames Stop retaining7frames, and Math/A2L/export/replay/real offscreenView at1,1024 and2621441analog samples. **The candidate remains private and unpromoted.** These checks extend the standalone results below; they do not qualify physical acquisition or the full interactive application.
+
+All409 current primary product files match the qualified samplerate-snapshot source manifest. Existing native GUI/test objects are hash-pinned before and after reuse; new native helpers replace main with an isolated fixture and Segment with either the current baseline or unchanged candidate SHA256 `7116da5202701b294e4e3a2b64ed954db09d5b73eb950535f0682a24fa17520c`. Current Session.cpp is SHA256 `0cf6baa211ba6815c8beafd8ad6a7a4412b88f3248b34fcd9bdb0cba5543a225`. No existing object, primary source or installed image is changed. Linux runs in VMware; Windows runs in the nested KVM VM, with one software-only boot for this task and no DLA assignment. Only the Demo driver is scanned; replay uses saved session files.
+
+Both64-frame series retain65536 exact incremental bytes; every Stop retains7168 exact bytes from7completed frames with overall stopped status. C++ checks frame counts, completion/outcome and every byte; an independent Python oracle checks the exported stored bytes again. All four64-frame exports have SHA256 `7daca2095d0438260fa849183dfc67faa459fdf4936e1bc91eec6b281b27e4c2`; all four Stop exports have SHA256 `c7d59719997c773047af17c551fa0ab7ed3f5bbbe1afc85da17aad6d5eef53fa`.
+
+For each analog size and variant, real MathSignal computes `source*2+0.25`, A2L uses the declared threshold, StoreSession writes srzip, and Session replays the saved analog data byte-exactly. Independent NumPy verifies every derived float and threshold byte; ordered archive chunks concatenate exactly to the source export. The largest source is10485764B, crosses the actual10MiB production boundary and is stored in3analog archive chunks. All12 analog cases pass. Baseline/candidate payloads match, all six same-OS render pairs are pixel-identical at1100×600, and all nine cross-OS payload comparisons match. Pixel equality is claimed within each OS; no cross-OS pixel identity or broad interactive GUI qualification is inferred.
+
+The current Session lifecycle bounds the memory benefit:
+
+| Actual64-frame Session measurement | Baseline | Candidate |
+| --- | --- | --- |
+| Windows private commit before start | 37900288B | 37896192B |
+| Windows private commit at direct Stopped signal, before worker cleanup | 719417344B | 46755840B |
+| Windows private commit after sampling-thread join | 46682112B | 46686208B |
+| Linux virtual-address increase at direct Stopped signal | 747003904B | 75673600B |
+| Linux RSS increase at direct Stopped signal | 1478656B | 9400320B |
+
+Current Session emits Stopped, then calls its existing free_unused_memory traversal before returning from the worker; stop_capture joins that worker. **Baseline already releases the reserve after join**, while all64frames remain readable in both variants. The candidate reduces reservation before that end-of-series cleanup. This observation does not demonstrate a persistent post-join leak. Linux RSS rises more for the candidate in this trial, so this case shows no Linux resident-RAM saving. Private commit, VMS and RSS remain distinct; no isolated copy-cost, CPU or physical throughput result is claimed. Synchronous optional allocation/copy of up to10MiB at completion still needs acquisition qualification.
+
+The first Linux runner failed on an incorrect report-format assumption after the native baseline had already exited0 with82/82cases and all assertions passed. R1 source/logs remain failed overall. QA-only R2 checks the complete detailed Boost report and reuses that original baseline result without rerunning it; the other seven Linux processes and all eight Windows processes then exit normally. No product assertion is relaxed. Windows preparation also retains its original PowerShell parse refusal and missing-PATH refusal; correction uses the documented absolute Python path in the verified empty private directory. No existing directory is deleted.
+
+Eight installed Windows files remain identical. All526 original guest file hashes and the25372298B result archive were verified before normal ACPI shutdown; Windows is now off. The1248 primary sources/four repository states, Linux images/launchers, current409-source tree and reused/new objects remain intact. Evidence is sealed as678 files under private `artifacts/aud013-current-consumers-20261107/`; private evidence and binaries are not uploaded.
+
+There are zero physical acquisitions, physical driver scans, source/model USB operations, resets, hub cycles, firmware actions or new source-ID reservations. This task covers declared finite Demo, between-frames Stop and single-analog offscreen consumers. Current decoder-consumer coverage, full interactive GUI, physical Windows,50MS/s acquisition timing, arbitrary concurrency, global OOM and fault recovery remain open. Historical View/first-data failures and AUD022/AUD006/AUD026/AUD027 remain unchanged; no candidate code or image is promoted. The pending owner-confirmed physical reconnection gate is unchanged.
+
+
 ## 7 November 2026 — AUD013 standalone checks pass on current Linux/Windows headers
 
 The unchanged rebased completion-compaction candidate passes the declared **standalone Segment software checks on Linux and Windows** with the current headers. Each platform passes53 allocation/completion contracts and three64-frame storage cases. **AUD013 remains a private, partially qualified candidate.** This work does not qualify Windows acquisition, the full Session/View paths or an installed image; no product code or binary is promoted.
