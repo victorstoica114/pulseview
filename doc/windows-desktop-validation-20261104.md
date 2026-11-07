@@ -1,5 +1,42 @@
 # Windows desktop capture and replay observations — 4 November 2026
 
+## 7 November 2026 — one finite Linux GUI50M INFO3 record passed; AUD006 not reproduced
+
+A new, predeclared native Linux GUI INFO3 capture at **50MS/s, 100Msamples/400MB, all32/unitsize4, finite Stream/no trigger/1.6V** passed its original RAW/archive, D0/D22 and dense temporal-witness contract. The known loss/replay fault did not reproduce in this record. This qualifies this bounded private route and record, not global50MS/s integrity, the installed product, continuous acquisition, manual Stop, fault recovery or an AUD006 fix. Earlier negative captures remain negative; AUD006 remains open.
+
+Exactly3 physical acquisitions ran sequentially, with zero retries, one GUI/private Xvfb and no Windows boot: private CAPI INFO3 at5M20Msamples80MB → GUI INFO3 at50M100M400MB → the same CAPI5M80MB return. Both controls passed independent original RAW/actual feed/Segment equality,40 fresh consecutive CRCs (971101–971140 and973101–973140) and zero D0 anomalies. The low-rate controls establish health; they are not a workload-matched high-rate frontend comparison. Linux runs in VMware, Windows/KVM stayed off, DLA1a86:5537 remained3-2/bus3/device3 at5000Mb/s and CH340bcd8134/source-v8 remained2-1.3/ttyUSB1 at12Mb/s. Source, wires, firmware and hub were preserved, with no flash/reset/power cycle. DLA firmware remained unknown/unqueried.
+
+The private CAPI helper is SHA256 `985e4df02cdd9e69b817c763317f6d1f700e1458120abcbd6f887b05bb19be27`. Its only capture-source change from the existing helper is fixed `SR_LOG_DBG` → `SR_LOG_INFO`; the original storage/Segment/moc objects are unchanged. An independent arithmetic oracle checked both20MiB+12byte self-test files. There were211 software contracts before first I/O. The new INFO3 completion guard joins actual callback HEADER/END/result, original process exit and independent kernel quietness without fabricating a DEBUG LOGIC sum. Both physical CAPI controls then verified that helper at INFO3. CAPI still writes an extra feed file; no causal frontend/logging conclusion follows from comparison with the GUI.
+
+Before the single GUI Run,3 additional software contracts checked one native press/release/sync without the generic UI helper's150ms post-click sleep. That sleep is useful for dialogs but would delay dense source scheduling. The actual first source write was6.561272ms after observed current kernel ARM. This is a host observation, not a device-ready ACK or physical generation timestamp. Source cadence0.02s/firstdelay0.005s/max300,99±3 CRCs, D0nominal50±1/edges≤51 and known44.11904ms origin coverage were fixed before target data. The UI visibly selected100M/50MHz, Stream, finite/all32/no trigger/1.6V. Historical Linux and Windows50M initial Stop/setup/ARM hashes agree and match the current original commands; these are configuration pins, not fresh high-rate reference data.
+
+GUI PID108444/start6717198 used the existing private GUIe4414dad/core8fa09dde/CXX71ef67fa/decoderff037c43. Original PID/start/module/file identities, current stderr prefix/token and GUI liveness were bound/rechecked before GO and at native complete END. Prefix224B +current347B/following0B +later replay/shutdown510B =full1081B conserve exactly. INFO3 has no per-packet FLOW and no native GUI feed/RAW trace claim. Independent current ARM/Stop, retired8IN1MiB requests and two sequential quiet reads were finalized by original monitor wait0 while serial stayed owned; source close followed the joint proof. Original GUI/supervisor/controller/private-server waits were0, with original GUI/server pidfds retained. Empty-authority access was refused, TCP disabled and private auth removed only after original server wait. Personal seat0 remained locked/unqualified.
+
+The original kernel file has792 records and382 positive1MiB receipts:400556032B active RAW. Both native archives have valid full ZIP CRCs,96 chunks and400000000 accepted bytes. Save/Open/SaveAs was completed natively and visibly before native close. All400MB, including the final partial UART waveform, equal an independent bit-plane transpose of the original accepted kernel prefix in both archives. The556032B surplus is retained separately, not appended to accepted data. Metadata and payloads remain equal after close; container hashes differ.
+
+| Evidence | SHA256 |
+| --- | --- |
+| Accepted payload in both archives | `5429727182cd6d1464e6d5ce1a9afacc1432cb11dde4febbc6cfbf6c299c673f` |
+| Metadata in both archives | `d2fe222438f3b4d618a8be9a9ea9ce23020737d6e050c52fc48cadda7a1b2d2f` |
+| Active original kernel RAW | `ad094dd1dd9ce0ba9eee8c888c10b30520676b40a3c9a7c5ee16922ed9502afa` |
+| First ZIP | `7b25cfb72e799ae445e22a63951326f5ec30f46dea891b5bcc940a181a8c9468` |
+| Roundtrip ZIP | `e72478ba4bd06f5f6302b4b9bbb287a04e7a8e1accbff205a6dd0f2f9012d991` |
+
+D0 had zero anomalies, observed periods49..51 and edge gaps49/32 samples. Independent and SDK STOP-checking decoders agree on99 fresh consecutive CRC messages972101–972199. All97794049 allowed origins of the known44.11904ms window are covered. A partial SDK EOF frame beginning at sample99996293 is retained: its expected Stop at100000415/416 lies beyond the100000000sample record. Its DATA annotation0x30 is unverified and excluded only from STOP-checked protocol bytes; no original samples were removed or repaired. The99 complete CRC messages and exact storage conversion do not establish arbitrary electrical continuity on the other30 channels.
+
+Offline kernel occupancy uses original event order from current ARM completion through the completion containing the final accepted RAW byte. The2255277us receipt window began with8 requests and stayed at5..8, with no0/1 duration or zero interval:
+
+| Pending IN | Duration, us |
+| ---: | ---: |
+| 5 | 760 |
+| 6 | 16002 |
+| 7 | 520851 |
+| 8 | 1717664 |
+
+Eleven offline contracts with1000 duration-oracle domains and4096 frame brackets check that accounting. These are host kernel request durations, not physical bus use, CPU or FIFO measurements. The contrast with the earlier negative's85.0472% at0/1 is consistent with the still-open depletion hypothesis; different frontend, feed I/O, logging and history prevent causal attribution. Neither a queue-size change nor a logging/FIFO fix is justified by this positive record. The next useful experiment is an explicitly matched CAPI INFO3/DEBUG comparison with identical core, storage/feed, geometry, source witnesses and closure gates.
+
+The first data reviewer refused with a missing `witness` alias after retaining its archive/kernel/D0 results. That failed source/output remains intact. R2 changed only the alias and separate output paths, then reread the same original capture under unchanged criteria; no acquisition was repeated. Private originals, source versions, partial EOF and unused RAW are sealed in `linux-GUI-INFO3-50M-20261107` (454 files). Earlier408/624-file cohorts remain closed. Product1248/HEAD/status/diffs/new-file hashes and fresh device/source/VM ownership checks passed after the final return. This is private Linux/POSIX LAB work with no shared product/Windows change, runtime promotion or published private capture/authentication material.
+
 ## 7 November 2026 — finite Linux GUI INFO3 qualified on a private Xvfb display
 
 The missing **finite LinuxDLA native GUI INFO3 route passed at 5MS/s, 20Msamples/80MB, all32 channels, unitsize4** on an explicitly owned private Xvfb display. Current native HEADER/complete END, independent kernel completion/quietness, source ownership, native Save/Open/SaveAs, exact original RAW-to-archive conversion and the predeclared D0/D22 witnesses all passed. This qualifies that bounded normal acquisition/storage route. It does not resolve AUD006 or qualify global50MS/s integrity, continuous acquisition, manual Stop, electrical fault recovery, the personal desktop or arbitrary32-channel electrical continuity.
