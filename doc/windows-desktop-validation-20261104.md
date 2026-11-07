@@ -1,5 +1,41 @@
 # Windows desktop capture and replay observations — 4 November 2026
 
+## 7 November 2026 — matched CAPI INFO/DEBUG/INFO at50M passed; AUD006 not reproduced
+
+A new fixed CAPI comparison passed at **50MS/s,100Msamples/400MB** with INFO, DEBUG and INFO again. The three records contain99,100 and99 fresh consecutive CRC messages, zero D0 anomalies and exact independent original RAW→true feed→Segment equality. **AUD006 remains open.** This lot did not demonstrate a logging dependency, a root cause or a product fix; the earlier negative captures remain negative.
+
+Exactly5 physical acquisitions ran sequentially, with zero retries/GUI/Xvfb/Windows boots: INFO5M20Msamples80MB health → INFO50M100M400MB A1 → DEBUG same geometry B → INFO same geometry A2 → INFO5M80MB return. All used the same private core `8fa09ddef3b43d8c4c014c4852a94bfafbbe0d64085a67f701ba36638fb2cce7`,1MiB8IN, finite Stream/all32/unitsize4/no trigger/1.6V, identical actual per-packet feed writes, storage/Segment objects and event-loop code. Linux7.2.9-1-MANJARO runs in VMware; Windows/KVM stayed off. DLA1a86:5537 remained3-2/bus3/device3 at5000Mb/s; CH340bcd8134/source-v8 remained2-1.3/ttyUSB1 at12Mb/s,1MHz D0 and fresh D22 UART. Wires, source, hub and firmware were preserved: no reset, flash or power cycle; DLA firmware remained unknown/unqueried.
+
+Both fixed-level helpers were rebuilt with the same current GCC16.2.1, headers, flags, linker inputs and unchanged original storage/Segment/moc objects. Their complete ELF files differ only in the GNU build-ID and one executable byte at offset16515:3(INFO) versus4(DEBUG). Executable layout, other code, read-only/data and dynamic-link bytes are identical. Capture-source difference is only fixed `SR_LOG_INFO` versus `SR_LOG_DBG`; no generic product switch was added. INFO helper SHA256 is `6549b73c402219298d9bc92f56bbcd9b60eef1a42f2cf285d30a4f3a2bb05439`; DEBUG is `52163a564d0ded6302cd6d5a9fb693c9a169116916831ffa382bd776382afe33`. Both passed independent20MiB+12byte arithmetic-oracle feed/Segment self-tests before hardware I/O.
+
+The predeclared criteria were D0nominal5/50±1samples and edge gaps≤6/51, two STOP-checking UART decoders agreeing,40±1 fresh consecutive CRCs for low controls and99±3 for high phases, plus all allowed origins of the known44.11904ms window for high phases. High source cadence0.02s/firstdelay0.005s/max300 was unchanged; observed first writes were7.941603/7.910643/7.874892ms after current kernel ARM observation. These are host timestamps, not device-ready ACKs or physical generation times. Ninety-one software contracts, the ELF pair check and both self-tests preceded first I/O;147 source/binary/configuration pins remained unchanged.
+
+| Phase | Accepted bytes | Fresh consecutive CRC messages | D0 periods / edge gaps, samples | Kernel receipt window / pending IN |
+| --- | ---: | --- | --- | --- |
+| INFO5M health | 80000000 | 40:974101–974140 | 4..6 /3,0 | 4040260us /7..8 |
+| INFO50M A1 | 400000000 | 99:975101–975199 | 49..51 /7,13 | 2254868us /6..8 |
+| DEBUG50M B | 400000000 | 100:976101–976200 | 49..51 /32,39 | 2255336us /7..8 |
+| INFO50M A2 | 400000000 | 99:977101–977199 | 49..51 /4,18 | 2255535us /6..8 |
+| INFO5M return | 80000000 | 40:978101–978140 | 4..6 /3,0 | 4040246us /7..8 |
+
+All five passed their original procedure and signal criteria. Every high record covers all97794049 allowed origins of the44.11904ms window. A1 retains an incomplete EOF start at sample99998233: expected Stop100002355/356 lies beyond100000000samples, with no complete SDK DATA byte. It remains unverified; no original waveform samples were removed or repaired. A2 and B have no unchecked EOF frame. Electrical witnesses remain limited to D0/D22; all32 digital storage/conversion equality does not establish arbitrary32-channel electrical continuity.
+
+Each high original kernel file has796 records and382 positive1MiB IN receipts,400556032 active RAW bytes; the556032B surplus is retained beyond the accepted400MB. Each low record retains80740352 active RAW bytes, including740352B surplus, with186 kernel records. All positive original kernel bytes were conserved, without a native WIRE trace. The DEBUG phase actually logged382 SR_DF_LOGIC packets in36325B of stderr; high INFO logged no DEBUG LOGIC packets and347B each.
+
+| High accepted LOGIC payload | SHA256 |
+| --- | --- |
+| INFO A1 | `fea99e6aebb295da91fcbeac19d035daf8a4bc891b45067367f6f5d4c6b401b4` |
+| DEBUG B | `138501465e3e7ccb3d467f01c95cb2107c5b1eac8674e3516b25b4fe3255f020` |
+| INFO A2 | `c96debdbcca23dc7edbacd997d33755ffddab2b55764983c9f6c720390a47099` |
+
+Occupancy was computed offline in original event order, from current ARM completion through the completion containing the final accepted RAW byte. High duration histograms were A1:6IN1454us/7IN509091us/8IN1744323us; B:7IN519529us/8IN1735807us; A2:6IN4270us/7IN540363us/8IN1710902us. All began with8 and ended this receipt window with7 pending requests, subsequently retired before source close. There was no0/1 duration or zero-IN interval in these windows. This measures host kernel request ownership, not bus activity, generation, CPU or FIFO occupancy.
+
+Every phase retained actual original native callback HEADER/END/result and process exit0, initial Stop/setup/ARM/final Stop, all retired8IN requests, two sequential quiet reads and monitor original wait0 while source serial stayed owned. Only then did source close; all five original controller Popen waits were0. INFO used current native INFO HEADER/END plus callback counters without inventing a DEBUG packet sum; B additionally used its actual DEBUG packet sum/order. Data integrity was reviewed separately. A demonstrably classified replay would have allowed the comparison to continue without qualifying corrupted data; an inconclusive outcome would have stopped forward phases, with the reserved low return still requiring real closure. No retry or manual recovery Boolean was used.
+
+Private originals, partials, source versions and preparatory refusals are sealed in `capi-logging-ABA-20261107` (307 files). The acquisition/source/hold/END body and independent data reviewer were reused byte-for-byte from the previous frozen lot; only fixed order, original receipt checks and helper selection changed. The actual entry test refused missing qualification before device I/O. A self-test invocation initially refused a pre-existing output directory; the corrected invocation used a new output as required, before any USB enumeration. Neither refusal caused a physical acquisition or a hardware retry.
+
+This is a bounded private Linux/POSIX LAB result, with no shared product/Windows code change or image promotion; the Windows exception is explicit. Fresh checks found USB/serial resources free, Windows off and product1248/HEAD/status/diffs/new-file hashes unchanged after return. It does not qualify global50MS/s integrity, the installed product, continuous acquisition, manual Stop, fault recovery or seat0. The next step is to compare the retained negative and passing receive timelines, configuration and source history offline before proposing another targeted test or changing queue/scheduling behavior. No additional acquisitions are reserved in this closed lot.
+
 ## 7 November 2026 — one finite Linux GUI50M INFO3 record passed; AUD006 not reproduced
 
 A new, predeclared native Linux GUI INFO3 capture at **50MS/s, 100Msamples/400MB, all32/unitsize4, finite Stream/no trigger/1.6V** passed its original RAW/archive, D0/D22 and dense temporal-witness contract. The known loss/replay fault did not reproduce in this record. This qualifies this bounded private route and record, not global50MS/s integrity, the installed product, continuous acquisition, manual Stop, fault recovery or an AUD006 fix. Earlier negative captures remain negative; AUD006 remains open.
