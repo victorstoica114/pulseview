@@ -1,5 +1,35 @@
 # Linux validation, 2 November 2026
 
+## 7 November 2026 — one finite Linux health capture passes after DLA reconnection
+
+After the owner confirmed a DLA-only USB reconnection, **one identification-only query and one finite Linux5MS/s health capture pass in their declared scope**. The DLA reappeared as1a86:5537 at3-2,bus3/device4,5000Mb/s,configuration1,with Windows off and USB/source unowned. The CH340 source remained2-1.3,12Mb/s,with its v8 waveform,wires and hub preserved. **This is a changed diagnostic precondition, not a demonstrated device fix.** Historical AUD027 identification refusals and AUD026/AUD006 high-rate failures remain open.
+
+The separate native identification tool sent one512B request and read one512B reply, with no preread,retry,reset or capture setup. Original native and observer exits are0; cleanup is verified. The strict reply contains DL32 and matches the earlier valid reply SHA256 `667f781b187b19a9170a30672ff5607feab64424616637492e699aea2a70a0b1`; request SHA256 is `ac80c2e3c44f48ab9b195db9492a62fe65174ec45a66cbbc70a4ec6f88f97e78`. Exactly4original USB records preserve1024payload bytes,with zero samples,queued/dropped/truncated/error records. The original RealLab.monitor method,actual reader command/readiness and dependencies were verified with private authorization consumed only in memory/stdin.
+
+The frozen R1 identification reviewer initially rejected reuse of the OUT transfer's tag by the later IN. This was a private reviewer defect: the kernel binary ABI defines an ID's submission/callback lifetime,and the tag is normally an URB address. [Linux usbmon documentation](https://docs.kernel.org/usb/usbmon.html) supports this lifetime-based accounting. The original records show completed OUT146µs,then56µs gap,then IN104µs,with no overlapping request. R1's failed collector verdict is preserved. Private R2 removes only the cross-lifetime inequality,retaining exact event order,pair IDs,times,bytes,status,cleanup and exit checks. All29offline contracts pass,including reused-tag positive and overlap negatives. Re-review uses the same original records/native reply; **no identification query is repeated**. This does not identify the cause of the earlier512-zero replies.
+
+The subsequent health plan admits at most one finite5MS/s,20Msample,80MB CAPI acquisition. Its own automatic strict model guard remains enabled,adding one model exchange; there is no explicit-connection bypass. Thus the two stages contain two model exchanges total. It uses unchanged private core8fa09dde,helper52163a56 at DEBUG4,reader5dfefa65,1MiB×8IN,noWIRE,no trigger and1.6V threshold. Fresh source block933,20ms cadence,first delay5ms and maximum240live commands are fixed before acquisition. Source v8 remains D0at1MHz/50%,D22UART,camera1/sd0.
+
+| Finite health evidence | Result |
+| --- | --- |
+| Accepted logic/feed/Segment | 80000000B,20000000samples,all bytes exact against independent original-RAW transposition |
+| Original active RAW retained | 80740352B;740352B surplus preserved |
+| Fresh consecutive CRC messages | 197,IDs933101 through933297 |
+| D0 witness | All periods4..6samples,zero anomalies;edge distances2/0 |
+| UART STOP checks | Two independent decoders agree;unchecked EOF frame is null |
+| Same-marker host/GPIO span | 19605978samples/3.921383336host seconds,about4999760.625samples per host second |
+| Passive scope | 186records,zero dropped,truncated,queued or failed records |
+| Procedure/ownership | Current ARM,actual END/Stop,retired8IN,two quiet reads and finalized observer while source held;original native/controller/observer waits0,then normal source protocol/serial close |
+
+The host span is a scale check,not a calibrated source-emission timestamp or applied-configuration ACK. Requested metadata stays5MS/s. Independent RAW→LOGIC equality covers all32stored bits; electrical witnesses remain limited toD0/D22. The observed IN occupancy is7..8,not a device FIFO,bus-capacity or CPU-cause measurement.80MB cannot test the historical128MiB replay displacement. No accepted samples,surplus or failed observations are silently removed.
+
+A first health preparation was refused before the native CAPI helper started: private binary copies had correct hashes but mode0644,so the observer command was not executable. Its original monitor/controller exits1,zero native processes/queries/acquisitions and empty numbered source-command lists are retained. The serial source was opened for STATUS only and closed;source_protocol_completed remains false,END/quiet remain false. That failed plan is closed and block932 stays reserved. A new directory preserves executable modes with copy2,checks X_OK and hashes before launch,and uses fresh933IDs. It passes21new one-phase admission contracts with444pins. **Only one native health acquisition occurs,with zero physical retries.** Namespace collisions930/931 and other read-only preparation refusals remain preserved.
+
+The identity cohort is sealed as41files,the pre-native preparation refusal as71files,and the successful health cohort as102files. Private raw captures,binaries and authorization are not uploaded. Product1248/four repository states,installed Linux images/launchers and existing sources remain unchanged. Linux runs in VMware; Windows/nestedKVM stays off. This private Linux/POSIX/usbmon diagnostic changes no common product or Windows image;it does not replace a Windows acquisition test. No hub cycle,reset,flash,FPGA or firmware change was performed,and the commercial DLA firmware remains unknown.
+
+The result qualifies this single finite low-rate health case after reconnection. It does not qualify50MS/s,Windows,continuous/manualStop/fault-recovery,arbitrary32-channel electrical integrity or the private AUD013compaction candidate. Further AUD026/AUD006 diagnosis requires a distinct bounded plan with fresh IDs; canceled prior limit phases remain closed.
+
+
 ## 7 November 2026 — AUD013 current decoder and collection software checks pass
 
 The unchanged private compaction candidate now passes the declared **current-source DecodeSignal/UART and file-consumer software matrix on Linux and Windows**. Four native helper runs, baseline and candidate on each OS, exit normally without retries. Each run passes9UART and11consumer cases:36UART cases and44consumer cases in total. **The candidate remains private and unpromoted.** No physical driver is scanned and no hardware acquisition is performed.
