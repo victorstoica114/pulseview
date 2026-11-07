@@ -1,5 +1,26 @@
 # Linux validation, 2 November 2026
 
+## 7 November 2026 — AUD013 current decoder and collection software checks pass
+
+The unchanged private compaction candidate now passes the declared **current-source DecodeSignal/UART and file-consumer software matrix on Linux and Windows**. Four native helper runs, baseline and candidate on each OS, exit normally without retries. Each run passes9UART and11consumer cases:36UART cases and44consumer cases in total. **The candidate remains private and unpromoted.** No physical driver is scanned and no hardware acquisition is performed.
+
+The409 current primary product files and existing GUI/Segment objects are hash-pinned to the preceding current-consumer qualification. Only the QA main is newly compiled and relinked; baseline/candidate product difference remains Segment.cpp SHA256 `7116da5202701b294e4e3a2b64ed954db09d5b73eb950535f0682a24fa17520c` for the candidate. Current Session/decoder code, all existing objects and installed images stay unchanged. Linux runs in VMware; Windows runs in nested KVM with one software-only boot and no DLA assignment.
+
+The fixed matrix imports8/16/24/32-bit synthetic binary files at2048 and262144samples, plus32-bit2621441samples crossing the real10MiB boundary. Real DecodeSignal channel assignment/mux and the UART decoder process D7 for8/16-bit inputs and D22 for24/32-bit inputs. The declared source is1MS/s,10kbaud,8data bits/no parity/one stop bit. The helper checks actual SDK binary-output chunks, not only progress counters, and exports those observed bytes separately:280bytes per run,1120bytes total.
+
+An independent NumPy generator reconstructs every source byte from the declared seeds. A separate Python UART decoder finds falling edges and samples bit centers in the actual input; its output and the independently expected bytes both equal every observed SDK byte. All36 UART cases pass these checks. For each source, ordered srzip logic chunks, full binary export and selected range `[3,count-2)` are byte-exact. The real Session also imports/replays each archive and checks sample count, unit size, completion, rate and outcome.
+
+Each run writes and then resaves a collection of three distinct32-bit frames. All eight collection archives preserve exact payloads and metadata:2048/262144/2621441samples,1MS/s,complete status,trigger0.0001 and integer origins `9007199254740993 + i*4000000`, above the exact-integer range of binary64. Independent review checks every nested payload, member size/hash and string-encoded origin. Baseline/candidate source and UART bytes match for all9matrix cases; all9cross-OS payload pairs match. The two same-OS1100×500 offscreen32-channel View image pairs are pixel-identical. ZIP container bytes and pixels across different OSes are not asserted identical.
+
+For the largest case, the UART stack is installed before import and all four runs observe three actual Session input notifications. This verifies the declared preinstalled-stack/multiple-input path. Per-SDK send chronology, arbitrary reader concurrency and electrical/acquisition timing are not proved by those notifications.
+
+The first copy verifier raised KeyError because it expected an older runner's timeout-field name. It failed before writing final guest receipts or archives. Its source/error remain preserved; QA-only R2 reads the actual `deadline_kill` field and still requires original native exit0 and no forced timeout termination. No native test is rerun and no product assertion is relaxed.
+
+All538 original guest file hashes and the157078806B result archive were verified after copying, before normal ACPI shutdown. Windows is now off. Eight installed Windows files, the1248 primary product files/four repository states, Linux images/launchers and all prior/new objects remain intact. Private evidence is sealed as704files under `artifacts/aud013-current-decoders-20261107/`; it and the binaries are not uploaded. The preceding678-file consumer cohort remains unchanged.
+
+There are zero physical acquisitions, source/model USB operations, resets, hub cycles, firmware actions or new source-ID reservations. This closes the bounded current UART/mux/file-consumer software subtask. Full interactive GUI, physical Windows, acquisition copy-cost/50MS/s timing, fault recovery, global OOM and arbitrary concurrency remain unqualified. Historical View/first-data failures and AUD022/AUD006/AUD026/AUD027 stay unchanged. The existing end-series baseline cleanup/memory-lifecycle findings remain valid, and the owner-confirmed physical reconnection gate remains pending.
+
+
 ## 7 November 2026 — AUD013 current Session and consumer software checks pass
 
 The unchanged private compaction candidate now passes the bounded **current-source Session and consumer software checks on Linux and Windows**. Each variant on each OS passes82 frontend regressions, a64-frame Demo series, a between-frames Stop retaining7frames, and Math/A2L/export/replay/real offscreenView at1,1024 and2621441analog samples. **The candidate remains private and unpromoted.** These checks extend the standalone results below; they do not qualify physical acquisition or the full interactive application.
