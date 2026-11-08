@@ -623,3 +623,123 @@ AUD028 and the earlier acquisition failures remain open. The next investigation
 needs a new bounded transport/VM comparison; a storage rewrite or repeated
 unchanged capture would not isolate the remaining cause. Only this documentation
 is published, without raw data, private binaries, credentials or firmware.
+
+## 8 November: Windows CAPI completes 400 MB; Linux handover health passes
+
+AUD028 now has a fresh Windows transport contrast. The private Windows CAPI
+route completed the requested 100 million samples / 400,000,000 LOGIC bytes at
+50 MS/s, with 100 fresh consecutive D22 CRC messages. This does **not** repair
+or explain the earlier Linux 80 MiB progress stall. The routes differ in OS,
+backend, read priming, outstanding request depth and virtualization, and these
+were sequential observations rather than an isolated causal experiment.
+
+The predeclared lot allowed four Windows captures, one Linux handover control
+and zero capture retries. It finished exactly that lot:
+
+| Route and phase | Requested rate / samples | Accepted LOGIC bytes | Fresh consecutive CRC messages | D0 complete periods | Result |
+| --- | --- | ---: | --- | --- | --- |
+| Windows reference | 5 MS/s / 20 M | 80,000,000 | 197: 301101–301297 | 4–6 samples, zero interior anomalies | Pass in stated scope |
+| Windows small | 50 MS/s / 20 M | 80,000,000 | 19: 303101–303119 | 49–51 samples, zero interior anomalies | Pass in stated scope |
+| Windows large | 50 MS/s / 100 M | 400,000,000 | 100: 305101–305200 | 49–51 samples, zero interior anomalies | Pass in stated scope |
+| Windows return | 5 MS/s / 20 M | 80,000,000 | 197: 307101–307297 | 4–6 samples, zero interior anomalies | Pass in stated scope |
+| Linux after Windows | 5 MS/s / 20 M | 80,000,000 | 197: 309101–309297 | 4–6 samples, zero interior anomalies | Pass in stated scope |
+
+Linux runs inside VMware; Windows 11 runs in the nested KVM VM. The DLA remained
+`1a86:5537`, outer-Linux path `3-2`, bus 3 / address 4, negotiated 5000 Mb/s.
+ESP32 generator remained CH340 `1a86:7523`, bcdDevice `8134`, path `2-1.2`,
+bus 2 / address 17 at 12 Mb/s. Its v8 configuration and wiring were unchanged:
+D0 1 MHz / 50% PWM, D22 UART, camera enabled and SD disabled. ESP32 hub remained
+CP2102 `10c4:ea60` / serial `0001`, path `2-1.4`, address 18. There was no new hub
+cycle, firmware flash, FPGA change or simultaneous Linux/Windows capture.
+Commercial firmware and FPGA were left unchanged; this cohort did not
+independently reidentify their version numbers.
+
+Both private helpers use the same C source, SHA-256
+`96433eec8a6f6b5567b838a8c67dcd5cfaf199aad6361a57104c1bd87916fc6f`.
+The Windows executable is `d0ac9c4c155f25d7844246e0c030c51bcb475c7f4c03235937362611aea7af5c`,
+with actual loaded private core
+`a17b662763d7e74e6e046a5e6b5c945c826c914cc160e329335aba2f8876fafc`.
+The Linux helper/core remain `52163a56…` / `8fa09dde…`. The frozen Segment
+storage implementation was retained; neither product installation was rebuilt
+or replaced. Before assignment, Windows passed a 20 MiB + 12 byte storage
+oracle checked independently, and the no-DLA geometry guard exited before
+acquisition. Those software checks alone were not treated as hardware proof.
+
+Every physical phase kept the strict automatic DL32 identity check, all 32
+channels, 1.6 V threshold, no trigger, finite driver sample limit, DEBUG logs
+and no WIRE trace. Live source commands were gated by the current native ARM and
+the original kernel ARM receipt, at 20 ms cadence / first delay 5 ms. Windows
+allowed at most 1100 live commands; the single Linux health control allowed
+240. All blocks 301–309 remain reserved. The original initial Stop/setup/ARM
+packet hashes match the earlier Linux counterparts for both 50 MS/s sizes.
+That proves the transmitted configuration packets, not electrical sample
+timing or device-side execution of those packets.
+
+The Windows backend used one outstanding 1 MiB WCH read; Linux used eight
+1 MiB asynchronous reads. Every accepted byte was compared from the preserved
+original kernel RAW prefix through an independent NumPy transpose, the CAPI
+feed and actual Segment storage. Two independent binary record parsers agreed
+on original event order and request ownership. All positive bytes, surplus and
+partial-edge evidence were retained. Windows RAW active bytes were 81,788,928
+for each 80 MB phase and 401,604,608 for the 400 MB phase; surplus was therefore
+1,788,928 and 1,604,608 bytes respectively. The Linux handover control retained
+80,740,352 RAW bytes, including 740,352 surplus bytes.
+
+Two STOP decoders agreed in every phase; all decoded CRC IDs were fresh and
+consecutive, with no unchecked EOF frame. At 50 MS/s the predeclared coverage
+test covered every possible origin of the known 44.11904 ms gap signature:
+17,794,049 origins in the small record and 97,794,049 in the large one. The
+400 MB record also passed the specific old 128 MiB replay review without
+finding that replay signature. Neither test establishes arbitrary continuity
+on all 32 physical inputs; D0/D22 witnesses retain their stated scope.
+
+For the Windows large record, kernel ARM completion to the completion containing
+the final accepted RAW byte took 2,861,117 us. In that interval the kernel
+accounting shows depth one for 2,324,823 us and depth zero for 536,294 us, across
+382 zero-depth intervals, maximum 9,628 us. The D22 witness spans 1.980268009 s
+between the first and last of its 100 complete messages. USB delivery duration
+is not acquisition duration: these are host request receipts and marker
+observations, not FIFO occupancy, generation timestamps or a bus analyzer.
+The passing Windows record also shows why a host interval without a pending
+IN request does not, by itself, demonstrate lost electrical samples.
+
+All four Windows originals had actual native HANDLE/PID/creation-time/image
+identity and original wait status zero. The WCH thread exited with pending
+count zero and two quiet reads before END. Independent kernel accounting
+confirmed final Stop, all requests retired and two sequential quiet reads.
+The ESP32 generator connection stayed owned until those proofs and the
+original host wait completed, then closed normally. The corresponding Windows
+kernel scopes contained 178 / 178 / 788 / 178 records, all without observer
+loss, queued records or errors. Thirty-six original payload files were copied
+and hash-verified before protected detach and normal VM shutdown. Nine
+installed Windows files and all 1248 primary source/HEAD/diff/new-file pins
+plus the installed Linux files remained intact. The final Linux control also
+had END/Stop, eight reads retired, two quiet reads, observer/native/controller
+wait zero and normal serial close; its 186 kernel records had no observer loss.
+
+Laboratory QA refusals are retained. The first bridge tried to query the
+native image after process exit; the corrected bridge queries it while live
+and checks creation time again through the same original handle after wait.
+Copy/review preparation also refused a marker path, then encountered a missing
+local LOGIC copy and a manifest that had listed its own then-empty contents.
+The first failed review and all original bytes remain preserved. The same
+physical reference was subsequently reviewed at fresh output paths with
+unchanged data criteria and explicit hash binding. The future manifest
+producer only excludes its own name after native exit. A Windows path-separator
+copy check was likewise corrected against the same copied software bytes.
+None of these repairs repeated a physical capture or changed the helper,
+driver, source waveform, acquisition geometry, timeout or request depth.
+
+The three new local lots are closed: Windows software preparation (38 files),
+Windows route (366 files), and Linux handover health (86 files). Private RAW
+captures, DLLs, firmware and VM material are not published here.
+
+AUD028 remains open: Windows WCH completed the large geometry that the earlier
+Linux eight-read route did not. The existing Linux negative still contains
+only 83,886,080 accepted bytes and the observed three-second eight-read stall;
+it is not relabeled as a passing 400 MB capture. This contrast motivates
+comparison of the compiled async and WCH priming/retirement/resubmission paths
+against these receipts before another hardware experiment or product change.
+It does not justify a depth/timeout workaround or an isolated firmware/OS
+cause. AUD006 and the older replay, wrong-rate, first-data/quietness and identity
+failures retain their existing qualification limits.
