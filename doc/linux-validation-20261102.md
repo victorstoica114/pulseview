@@ -743,3 +743,104 @@ against these receipts before another hardware experiment or product change.
 It does not justify a depth/timeout workaround or an isolated firmware/OS
 cause. AUD006 and the older replay, wrong-rate, first-data/quietness and identity
 failures retain their existing qualification limits.
+
+## 8 November: native syscall observer qualified; the stall did not recur
+
+The compiled-path comparison was continued against all 477 frozen Linux and
+Windows source files, with 529 input pins and two original binary parsers.
+In the current Linux 80 MiB negative, host depth remained 5–8 throughout the
+474,951 us progress window, followed by the already recorded 3,044,757 us with
+eight requests outstanding. It never reached zero or one in that progress
+window. This is a different observed state from the older replay case whose
+configured eight reads dynamically fell to zero/one. It still does not reveal
+HCD dispatch, physical bus activity, FIFO occupancy or earlier service pressure.
+The existing receiver-pipeline and historical Linux read-depth/pause audits
+were reused as history; neither was rerun as a current control.
+
+The missing observation was return from the last native submit/callback and
+subsequent native event progress during a stall. The later timeout log proves
+eventual return through `libusb_handle_events_timeout`, but does not locate
+that return inside the preceding interval. The separate ESP32 generator host
+writer continuing to run is not evidence of native dispatcher progress.
+
+A private Linux syscall observer was therefore prepared without rebuilding
+or changing the frozen helper/core or installing a system package. The copied
+distribution tracing executable was checked against the local package SHA-256
+and its PGP signature. Daemonized tracing plus a per-owner child subreaper kept
+the actual helper at the original Popen PID and made the original tracer wait
+available to that same owner. Explicit interruptible mode was required;
+kill-on-exit was not enabled. Four software fixture cases cover success,
+target exit one, and tracer termination while the original target stays alive
+and owned. Two actual frozen CAPI/Segment self-tests each independently checked
+20 MiB + 12 bytes and real mapped-core/native/tracer waits, without reaching
+USB acquisition APIs. The private adapter, source ownership and wait-order
+guards were tested before hardware. The preparation has 94 sealed files;
+the fixed physical plan has 32 contracts and 457 prepared input pins.
+
+Software refusals remain preserved: the first output parser expected different
+ioctl/poll formatting; the first detach attempt encountered the tool's default
+blocked fatal signals; the later human-message check found no literal detached
+word even though the kernel TracerPid, still-live target and original waits
+proved detach. That final correction reviewed the same original fixture
+records without repeating the target. No failed fixture was presented as a
+hardware qualification or used to release a physical acquisition owner.
+
+The new plan allowed exactly one traced Linux 50 MS/s / 100 M sample diagnostic
+and one untraced 5 MS/s / 20 M sample return, with zero capture retries and no
+Windows boot, hub cycle, firmware/FPGA change or new depth/timeout setting.
+The first proposed source namespace collided with historical 310001-series
+messages and was refused before reservation or I/O. A broader audit checked
+12,536 JSON files and found no earlier emitted-source collision for the prior
+Windows 301–309 namespace. The final preparation checked 781 source binary
+files as well; blocks 311–313 were reserved for this new lot and remain reserved.
+
+Both physical phases passed their predeclared data and closure scope:
+
+| Phase | Accepted LOGIC | Original active RAW / retained surplus | Fresh consecutive D22 CRC | D0 complete periods |
+| --- | ---: | --- | --- | --- |
+| Traced Linux 50 MS/s, 100 M samples | 400,000,000 B | 400,556,032 / 556,032 B | 99: 311101–311199 | 49–51 samples; zero interior anomalies |
+| Untraced Linux return, 5 MS/s, 20 M samples | 80,000,000 B | 80,740,352 / 740,352 B | 197: 313101–313297 | 4–6 samples; zero interior anomalies |
+
+The observer qualification is limited to these passing runs and the recorded
+software cases; arbitrary tracer/native/hardware fault recovery is unqualified.
+
+The exact original kernel RAW prefix, independent transpose, CAPI feed and
+Segment storage agree in both phases. Two STOP decoders agree, no unchecked
+EOF frame remains, and partial D0 edges and surplus bytes are preserved. The
+400 MB record covers all 97,794,049 possible origins of the known 44.11904 ms
+gap signature and passed the specific 128 MiB replay review without finding
+that signature. These remain D0/D22 and conversion/storage checks, not an
+arbitrary all-channel electrical continuity guarantee.
+
+The diagnostic retains 561,634 bytes / 2328 lines of original native syscall
+output. All 398 USBDEVFS_SUBMITURB calls returned success and associate in
+unchanged order with the 398 original kernel submissions, including identity,
+command, sample and drain traffic. Each has a unique kernel S compatible with
+its same-host displayed entry/return interval and a 2 us combined display
+quantization envelope. Native pointer arguments do not independently decode
+the URB endpoint or length: those fields come from the associated original
+kernel record and existing setup/data checks. This compatibility check is not
+independent clock calibration. Observed submit durations are 78–2002 us,
+median 403 us; their sum 164,226 us is not CPU cost or a tracing overhead bound.
+
+Kernel ARM to the completion containing the final accepted diagnostic byte
+took 2,255,297 us, with depth six for 1818 us, seven for 960,811 us and eight for
+1,292,668 us. The original scope has 796 records with no observer loss or
+queued/error records. The untraced return has 186 records and depth seven/eight.
+Both have real END/Stop, eight reads retired, two quiet reads, the ESP32
+generator held until those proofs, original native/controller/observer waits
+zero and normal serial close. The diagnostic additionally has the actual
+native/tracer identity and original tracer wait zero before source close.
+All 1248 primary source/HEAD/diff/new-file pins and installed Linux files remain
+intact. The 147-file physical lot is closed. DLA remains 3-2 / bus 3 / address 4
+at 5000 Mb/s, ESP32 generator 2-1.2 / address 17, with unchanged v8 wiring and
+waveform; Linux is in VMware and Windows stayed off.
+
+**AUD028 was not reproduced under observation and is not fixed.** The older
+untraced 83,886,080-byte negative remains incomplete and unchanged. A passing
+instrumented case does not supply the missing return/progress boundary during
+that negative, demonstrate that tracing cured it, or measure an isolated
+instrumentation effect: scheduling and capture history differ. There is no
+new product candidate or global 50 MS/s qualification. Keep the observer for
+a distinct predeclared regression or a recurrence; do not repeat this closed
+lot merely to seek a desired outcome or substitute a depth/timeout workaround.
