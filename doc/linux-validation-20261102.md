@@ -463,3 +463,104 @@ from this evidence. Further captures require recovery from the non-quiet state.
 This new failure has a late-data/non-quiet-drain dimension, unlike the earlier
 zero-data/quiet-drain observation; they are not asserted to share an internal
 cause. AUD013 stays private, AUD022 remains open, and Windows stays deferred.
+
+
+## 8 November 2026 — observed hub recovery; finite 50MS/s progress stall remains open
+
+One authorized hub cycle was observed in the new setup, with ESP32 generator
+(CH340/bcd8134) outside the switched hub and ESP32 hub (CP2102/0001, GPIO23)
+independently connected. Linux is still a VMware guest; Windows nested KVM
+remained off throughout. DLA firmware version is unknown; no firmware, FPGA,
+product code, transfer depth, timeout, wiring or generator waveform was changed.
+
+Two host preparation refusals are retained. The first hub test failed with
+`Permission denied` before opening UART or writing CYCLE: its original wait is1
+and `cycle_write_attempted=false`. A Linux `uaccess` rule matching only the
+CP2102/0001 tty was installed; rule bytes and effective user ACL were checked.
+A separate capture preparation then found `/dev/usbmon3` absent after the Linux
+reboot. It ended before native run/model query/ARM/numbered witness commands;
+original controller/observer waits are1, the generator STATUS-only session
+closed, and normal postflight/END/quiet were not fabricated. Loading the
+existing `usbmon` module restored the observer character node without USB reset.
+The fresh admission checks that node and keeps the earlier refused cohort closed.
+
+The single actual CYCLE write completed with the same ESP32 hub boot, exactly
+two reported falling edges and final idle/released GPIO23. DLA disappeared and
+returned from bus3/dev3 to dev4 at5000Mb/s. ESP32 generator stayed bus2/dev17 and
+ESP32 hub stayed bus2/dev18 in all9 sampled USB states, with no kernel USB event
+for either board in the cycle interval. UART did not disconnect; original host
+wait is0. Pulse widths and uninterrupted electrical waveform output during the
+cycle were not measured. No ambiguous CYCLE was resent.
+
+A NEW finite5MS/s20Msamples/80MB health capture then passed:80,000,000 accepted
+bytes are the exact independently transposed prefix of80,740,352 original
+kernel RAW bytes, matching feed and Segment;740,352 surplus bytes are retained.
+It contains197 fresh consecutive CRC witnesses944101..944297, D0 periods4..6
+with zero anomalies, and matching independent STOP decoders. Actual END, Stop,
+retired8IN, two quiet reads and finalized observer were confirmed while the
+generator UART remained owned; native/controller/observer waits are0 before
+normal postflight and serial closure.186 observer records have zero loss,
+truncation, queued events or reader errors. This qualifies the stated finite
+5M health following the observed cycle, without claiming an acquisition fix.
+
+The next NEW bounded comparison kept50MS/s constant while changing only the
+sample limit20M→100M→20M; its final5M health was preplanned. All high phases
+use the same DEBUG helper52163a56, core8fa09dde, passive reader5dfefa65,
+1MiB×8 reads, no WIRE,1.6V/no trigger, and generator20ms/first5ms/max1100.
+The same frozen controller/source-owner/RAW-review bodies are used.40 admission
+and closure contracts passed before I/O;444 source/runtime/plan pins and
+executable copy modes were checked. No extra model warmup or connection bypass
+was used; the strict automatic DL32 guard remains mandatory.
+
+| Actual phase | Requested | Accepted | Fresh CRC witnesses | Native/original controller wait | Result |
+| --- | --- | --- | --- | --- | --- |
+| First50M |20Msamples/80MB |80,000,000B |19,945101..945119 |0/0 |Qualified in this scope |
+| Large50M |100Msamples/400MB |83,886,080B (80MiB) |20,947101..947120 |1/1 |Incomplete, unqualified |
+| Final5M |20Msamples/80MB |80,000,000B |197,951101..951297 |0/0 |Qualified in this scope |
+
+There were3 actual captures and zero retries in this comparison. The dependent
+second50M20M phase was permanently canceled after the large failure. All actual
+phases have real END/Stop/retired8IN/twoquiet/source-held proof, observer wait0
+and normal protocol/serial closure. There was no forced abandonment or second
+hub cycle. All945..952 witness blocks remain reserved, including canceled IDs.
+The preceding separate5M health makes4 physical acquisitions in this work,
+with zero physical retries; the refused preparation adds zero acquisitions.
+
+The large capture correctly reports `Capture incomplete: sample data did not
+arrive within the transfer timeout.` Its original194-record kernel scope has
+80 complete1MiB positive sample completions. The first arrived9360us after
+ARM completion and the last at474951us. After this progress, all8 submitted
+host IN requests stayed pending for3,044,757us without sample completions.
+Stop was submitted3,049,398us after the last positive completion. All requests
+retired, with zero positive post-Stop bytes and two quiet reads. Two independent
+binary parsers agree on the original event framing and order; no new I/O was
+used for this review.
+
+Every saved prefix matches original kernel RAW→independent transpose→feed→
+Segment exactly. The failed large prefix has D0 periods49..51/zero interior
+period anomalies and20 fresh ordered CRC messages, with matching STOP decoders;
+its partial D0 edges40/18 and unchecked EOF frame are retained. It remains
+unqualified for the requested400MB. Its witnesses support the requested50M
+scale rather than the earlier diagnostic5M-scale negative. It also differs
+from the prior0B-before-first-data case with64MiB after Stop and no quietness.
+These distinct failures are preserved; a common internal cause is not shown.
+The partial80MiB scope cannot test128MiB replay, and the later positive5M
+control does not validate or repair the failed high-rate capture.
+
+AUD028 records this progress-then-stall observation separately. AUD006,
+AUD022, AUD026 and AUD027 remain open; no firmware/bridge/HCD/VMware cause,
+timeout/depth workaround or global integrity claim follows. D0/D22 are limited
+electrical witnesses, while all32 storage conversion is checked independently.
+Only finite Linux routes in the stated sizes are covered; Windows, continuous
+capture, manual Stop, arbitrary inputs and general fault recovery are not
+qualified by this work. No shared product source or Windows image changed;
+1248 primary source/HEAD/status/diff and installed Linux/launcher checks passed.
+Offline Windows images were not re-read.
+
+Evidence is closed in `hub-recovery-20261108` (34 files), refused preparation
+`hub-recovered-health-20261108` (53), qualified low health
+`hub-recovered-health-ready-20261108` (86), and negative comparison
+`limit-only-after-hub-20261108` (196). Original errors, waits, partial data,
+surplus and EOF records remain preserved. Only this documentation is published;
+private raw traces, firmware, credentials, binaries and host configuration are
+not uploaded. Closed cohorts and canceled phases must not be rerun.
