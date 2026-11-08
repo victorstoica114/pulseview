@@ -564,3 +564,62 @@ Evidence is closed in `hub-recovery-20261108` (34 files), refused preparation
 surplus and EOF records remain preserved. Only this documentation is published;
 private raw traces, firmware, credentials, binaries and host configuration are
 not uploaded. Closed cohorts and canceled phases must not be rerun.
+
+
+## 8 November 2026 — offline review of the final LOGIC/storage callback
+
+The preceding AUD028 failure remains incomplete at80MiB; no capture was
+repeated. This follow-up adds zero hardware I/O, native executions, VM boots,
+model queries, serial commands or witness IDs. It reviews the current negative,
+the current small positive and a historical400MB DEBUG positive on their
+original bytes.41 direct input pins,477 compiled core source hashes, actual
+loaded core8fa/helper5216 and the linked storage/Segment/moc objects are checked.
+Two independent parsers agree on the original USB event framing and order.
+
+The negative has80 positive1MiB sample completions and80 synchronous DEBUG
+LOGIC deliveries totaling83,886,080B. There are eight sample reads actually
+outstanding across ARM and80 subsequent sample submissions before Stop. A
+separate, already-completed empty EP81 read before ARM is excluded from the
+primed set. The final positive completion is record178; a new sample submission
+at record179 follows3673us later. All8 IN requests are then pending for
+3,044,757us without a completion.
+
+The compiled route is `decode_transfer` → `sr_session_send` → the synchronous
+helper LOGIC callback → `QFile.write` and `Segment::append_samples` → return →
+`libusb_submit_transfer`. The final synchronous LOGIC/storage callback had
+therefore returned before that new submission. This excludes a still-blocked
+last storage append as the immediate state during the observed stall. It does
+not assert that the enclosing libusb callback or submission ioctl had already
+returned at the USB submission timestamp. Earlier I/O/CPU pressure and
+subsequent kernel/HCD/VMware/device/bridge behavior remain unisolated. A returned
+`QFile.write` is not proof of disk durability or absence of I/O pressure. No
+storage option, cache, priority, timeout or queue-depth workaround is justified.
+
+The host ESP32 generator writer records178 numbered write/flush operations
+over3.537556904s, with a maximum start gap46.630073ms and maximum write-through-
+flush duration0.756387ms. These show host writer liveness only; the retained
+ACKs have no per-packet reception timestamps, and the numbers are not GPIO
+emission timestamps or clock calibration. They do not locate the USB cause.
+
+The historical DEBUG record completed400,000,000B with the exact same
+helper/core/storage objects. It is a counterexample to an unconditional80MiB
+software cap, not a new paired causal control. Its generator command ceiling300
+differs from the current1100; history and physical setup differ as well. No
+qualification of the new negative or general high-rate integrity is transferred.
+
+R1 of this offline reviewer counted the completed pre-ARM empty read as a ninth
+primed request and refused. Its exact source, exit1 and stderr are retained. R2
+requires an initial read still be outstanding across current ARM; data, order
+and request ownership criteria are unchanged.14 contracts cover legal sequential
+request-tag reuse, live reuse, unowned terminals, changed identity/count/clock/
+order, unretired requests, the real pre-ARM empty read and a missing final
+resubmission. The completed small record correctly receives no last-resubmission
+proof. No original trace, capture or failed verdict was rewritten.
+
+The10-file `progress-stall-callback-review-20261108` evidence is closed. This is
+an offline audit of Linux sources and evidence: no shared source, image or
+installed product changed, and no new Windows hardware qualification is claimed.
+AUD028 and the earlier acquisition failures remain open. The next investigation
+needs a new bounded transport/VM comparison; a storage rewrite or repeated
+unchanged capture would not isolate the remaining cause. Only this documentation
+is published, without raw data, private binaries, credentials or firmware.
