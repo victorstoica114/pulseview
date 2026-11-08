@@ -20,7 +20,10 @@
 
 #include <extdef.h>
 
+#include <algorithm>
 #include <cstdint>
+#include <cstring>
+#include <vector>
 
 #include <boost/test/unit_test.hpp>
 
@@ -29,6 +32,87 @@
 using pv::data::Segment;
 
 BOOST_AUTO_TEST_SUITE(SegmentTest)
+
+class CompletionSegment : public Segment
+{
+public:
+	explicit CompletionSegment(unsigned int unit_size) :
+		Segment(7, 1000000, unit_size) {}
+
+	using Segment::append_samples;
+	using Segment::get_raw_samples;
+	using Segment::begin_sample_iteration;
+	using Segment::continue_sample_iteration;
+	using Segment::end_sample_iteration;
+	using Segment::get_iterator_value;
+};
+
+BOOST_AUTO_TEST_CASE(CompletionAcrossChunks)
+{
+	// A 24-bit payload crossing the production chunk boundary exercises both
+	// the full chunks and the last, partially filled chunk.
+	const uint64_t count = 4 * 1024 * 1024;
+	std::vector<uint8_t> input(count * 3), output(input.size());
+	for (size_t i = 0; i < input.size(); ++i)
+		input[i] = uint8_t(i * 37 + 11);
+
+	CompletionSegment segment(3);
+	segment.append_samples(input.data(), count);
+	unsigned int notifications = 0;
+	QObject::connect(&segment, &Segment::completed, [&] {
+		++notifications;
+		BOOST_CHECK(segment.is_complete());
+		BOOST_CHECK_EQUAL(segment.get_sample_count(), count);
+		segment.get_raw_samples(0, count, output.data());
+		BOOST_CHECK(output == input);
+	});
+	segment.set_complete();
+	BOOST_CHECK_EQUAL(notifications, 1);
+	BOOST_CHECK_EQUAL(segment.unit_size(), 3);
+	BOOST_CHECK_EQUAL(segment.samplerate(), 1000000);
+	BOOST_CHECK_EQUAL(segment.segment_id(), 7);
+
+	segment.free_unused_memory();
+	segment.free_unused_memory();
+	std::fill(output.begin(), output.end(), 0);
+	segment.get_raw_samples(0, count, output.data());
+	BOOST_CHECK(output == input);
+}
+
+BOOST_AUTO_TEST_CASE(CompletionWithHeldIterator)
+{
+	std::vector<uint32_t> input(513), output(input.size());
+	for (size_t i = 0; i < input.size(); ++i)
+		input[i] = uint32_t(i * 131) ^ UINT32_C(0xa5a55a5a);
+
+	CompletionSegment segment(sizeof(uint32_t));
+	segment.append_samples(input.data(), input.size());
+	auto iterator = segment.begin_sample_iteration(0);
+	segment.set_complete();
+	segment.free_unused_memory();
+	for (size_t i = 0; i < input.size(); ++i) {
+		uint32_t value;
+		std::memcpy(&value, segment.get_iterator_value(iterator), sizeof(value));
+		BOOST_CHECK_EQUAL(value, input[i]);
+		segment.continue_sample_iteration(iterator, 1);
+	}
+	segment.end_sample_iteration(iterator);
+	segment.free_unused_memory();
+	segment.get_raw_samples(0, input.size(),
+		reinterpret_cast<uint8_t*>(output.data()));
+	BOOST_CHECK(output == input);
+	BOOST_CHECK(segment.is_complete());
+}
+
+BOOST_AUTO_TEST_CASE(CompletionEmpty)
+{
+	CompletionSegment segment(4);
+	BOOST_CHECK_NO_THROW(segment.set_complete());
+	BOOST_CHECK_NO_THROW(segment.free_unused_memory());
+	BOOST_CHECK_NO_THROW(segment.free_unused_memory());
+	BOOST_CHECK(segment.is_complete());
+	BOOST_CHECK_EQUAL(segment.get_sample_count(), 0);
+}
 
 
 /* --- For debugging only

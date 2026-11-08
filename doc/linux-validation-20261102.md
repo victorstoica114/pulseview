@@ -844,3 +844,138 @@ instrumentation effect: scheduling and capture history differ. There is no
 new product candidate or global 50 MS/s qualification. Keep the observer for
 a distinct predeclared regression or a recurrence; do not repeat this closed
 lot merely to seek a desired outcome or substitute a depth/timeout workaround.
+
+
+## 8 November 2026 — release unused Segment tails at frame completion
+
+AUD013 is a host storage issue: completed small frames retain their unused
+10 MiB chunk reserves until the entire capture series finishes. Existing Session
+cleanup already releases those reserves before the sampling thread returns.
+This is therefore a reduction of memory held **during a series**, not a repair
+of a persistent post-join leak.
+
+The Segment change calls the existing iterator-aware `free_unused_memory()`
+before the completion notification. Active iterators still defer replacement
+until the last iterator exits. Optional shrink allocation uses `std::nothrow`;
+failure preserves the original buffer and all accepted data. An already tight
+tail is left alone, including the existing end-of-series cleanup. Sample count,
+ordering, origins, unit size and the existing seven padding bytes are unchanged.
+There is no transport/firmware change or new product option.
+
+The exact qualified Segment source has SHA256
+`7116da5202701b294e4e3a2b64ed954db09d5b73eb950535f0682a24fa17520c`.
+Three public Segment tests cover a 24-bit payload across the production chunk
+boundary and its completion callback, an iterator held through completion and
+deferred cleanup, and empty completion. The exact proposed test source has
+SHA256 `4a53b36301a98179d597c1de5b8303236210e42f4b0459679c6d7d14c7bda087`.
+Each baseline and candidate passes all 85 frontend test cases and every assertion
+on Linux/VMware and Windows/nested KVM, with physical opt-in tests disabled.
+The earlier 53 storage/allocation contracts and current Demo/Stop, analog/Math/
+A2L, decoder, export, collection and rendering evidence remain separate and
+unchanged; they were not silently replaced by the new test runs.
+
+### Memory and completion cost
+
+The previously reported current Session Demo64x1024-byte case measures Windows
+private commit before / at the direct Stopped signal / after thread join:
+
+| Variant | Before | Stopped | After join |
+| --- | ---: | ---: | ---: |
+| Baseline | 37,900,288 B | 719,417,344 B | 46,682,112 B |
+| Candidate | 37,896,192 B | 46,755,840 B | 46,686,208 B |
+
+The new real MainWindow 50 MS/s, 20x100 ms window comparison gives:
+
+| Variant | Before | Stopped | After join |
+| --- | ---: | ---: | ---: |
+| Windows baseline | 45,727,744 B | 514,179,072 B | 494,665,728 B |
+| Windows candidate | 45,809,664 B | 494,682,112 B | 494,608,384 B |
+
+These are private-commit observations, not measurements of physical RAM saved.
+No Linux RSS reduction is claimed. A separate 20-frame software probe measures
+the actual completion call, including optional allocation/copy and locking.
+For a 20 MB frame, observed candidate median / maximum were 0.582 / 1.374 ms on
+Linux and 1.831 / 2.079 ms on Windows. These are observed wall times, not CPU
+utilization, calibrated worst-case bounds or isolated USB overhead. The change
+moves at most one partially used 10 MiB tail copy into per-frame completion;
+it avoids copying that tail again in the existing final cleanup.
+
+### Bounded physical qualification
+
+Each finish case captures 20 overlapping event windows of 100 ms, 32 channels,
+Stream mode, 1.6 V, D22 falling edge and 50% pretrigger. Stop is requested through
+the real MainWindow Run/Stop path after at least five windows. The same unchanged
+ESP32 generator v8 supplies D0 1 MHz PWM and numbered D22 UART messages every
+20 ms. Linux is VMware; Windows is nested KVM/WCH. DLA is `1a86:5537`, negotiated
+5000 Mb/s at USB path 3-2; its address changes from dev4 to dev5 only at the
+necessary hub recovery described below. The commercial firmware is unchanged
+and its exact revision remains unconfirmed.
+
+| Case | Retained frames | Fresh consecutive CRC messages | Full D0 periods |
+| --- | ---: | --- | --- |
+| Windows baseline 50 MS/s | 20 | 62: 325101..325162 | 49..51, zero bad |
+| Windows candidate 50 MS/s | 20 | 62: 326101..326162 | 49..51, zero bad |
+| Windows candidate Stop 5 MS/s | 6, last partial | 16: 327101..327116 | 4..6, zero bad |
+| Windows candidate finish 5 MS/s | 20 | 60: 328101..328160 | 4..6, zero bad |
+| Linux baseline 50 MS/s | 20 | 62: 321101..321162 | 49..51, zero bad |
+| Linux candidate 50 MS/s after recovery | 20 | 62: 352101..352162 | 49..51, zero bad |
+| Linux candidate Stop 5 MS/s | 5 | 15: 353101..353115 | 4..6, zero bad |
+| Linux candidate finish 5 MS/s | 20 | 60: 354101..354160 | 4..6, zero bad |
+
+All 131 retained frames (1,701,108,740 bytes, with intentional overlap) equal an
+independent transpose of the original kernel RAW at their exact source origins.
+Collection members, inner payloads, 64-bit origin strings, rates, status and
+0.05 s trigger metadata are checked independently, and native collection replay
+matches. All original RAW categories and surplus are retained. Each positive
+case has actual HEADER/END, sampling-thread join, original native/controller
+waits zero, all original USB requests retired, two quiet reads after Stop and
+the generator descriptor held through finalized observer proof. Windows also
+has its actual original process HANDLE/creation/image and WCH worker exit,
+pending0/quiet1 evidence. Original guest files are copied/hash-verified before
+protected detach and normal VM shutdown.
+
+The electrical witnesses cover D0/D22 only. All32 equality proves conversion and
+storage equality, not arbitrary electrical continuity on every channel. These
+variable-duration window cases require at least 40 complete fresh CRC messages
+for finish or 10 for Stop, two agreeing STOP-checking decoders, no interior
+sequence gaps/replay, bounded D0 periods and a coarse host/GPIO rate witness.
+They do not replace the earlier fixed-duration finite80/400 MB acceptance rules.
+
+### Retained failure and scope limits
+
+The first Linux candidate attempt received **zero LOGIC bytes and zero windows**:
+first-data stall, then 64 MiB returned only during post-Stop draining without
+becoming quiet. It never exercised the new per-frame compaction. Its original
+158 kernel records have no outstanding request at the end, but they do not
+prove endpoint quietness. An offscreen QA error-teardown hold outlasted the
+60-second passive reader. The original negative, a prematurely started offline
+reviewer's missing-run-record refusal, and controlled-abandonment receipts
+(native -15, source owner -9; no original observer-wait receipt) are preserved.
+None is labeled a normal close, a qualified capture or a Segment fix.
+
+One previously authorized necessary hub cycle recovered DLA dev4→dev5/5000.
+ESP32 generator dev17 and ESP32 hub dev18 retain their USB identities in all nine
+observed states; no electrical continuity during the cycle is inferred. A new
+finite 5 MS/s/80 MB control then passes independent RAW/feed/Segment equality,
+197 fresh CRC messages, D0 and END/quiet before the three new candidate cases.
+The old cohort stays closed; unused reserved IDs are not reused. In particular,
+Linux baseline before recovery versus candidate after recovery is **not an
+isolated throughput comparison**. The older intermittent transport/integrity
+symptoms remain monitored with their negative evidence; no firmware cause,
+depth/timeout workaround or general 50 MS/s continuity fix is claimed.
+
+The physical fixtures use private diagnostic cores Linux8fa09dde / Windowsa17b6627.
+Their 477-file compiled-source manifest is pinned; 476 files equal the primary
+core tree. `api.c` adds two INFO HEADER/END logs and omits a three-line WCH
+nonquiet-error branch. Every positive WCH case independently requires quiet1,
+so that omitted branch is untaken in those cases; Linux does not compile it.
+This provenance difference is explicit, and no diagnostic core is promoted by
+the Segment change. Arbitrary concurrent readers, real system-wide OOM and
+untested fault-recovery scenarios are not certified by this bounded result.
+
+Private originals and review: `aud013-final-qualification-20261108`,
+`aud013-physical-20261108`, `aud013-controlled-abandon-20261108`,
+`aud013-hub-recovery-20261108`, `aud013-recovered-health-20261108`,
+`aud013-post-recovery-20261108`, `aud013-public-regressions-20261108`,
+`aud013-final-review-20261108`. Captures, executables, vendor libraries, firmware,
+VM disks and credentials are not publication payloads.

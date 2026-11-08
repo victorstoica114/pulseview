@@ -23,6 +23,7 @@
 #include <cassert>
 #include <cstdlib>
 #include <cstring>
+#include <new>
 
 #include <QDebug>
 
@@ -99,6 +100,7 @@ uint32_t Segment::segment_id() const
 void Segment::set_complete()
 {
 	is_complete_ = true;
+	free_unused_memory();
 
 	completed();
 }
@@ -118,15 +120,18 @@ void Segment::free_unused_memory()
 		return;
 	}
 
-	if (current_chunk_) {
+	if (current_chunk_ && unused_samples_) {
 		// No more data will come in, so re-create the last chunk accordingly
-		uint8_t* resized_chunk = new uint8_t[used_samples_ * unit_size_ + 7];  /* FIXME +7 is workaround for #1284 */
+		uint8_t* resized_chunk = new (std::nothrow) uint8_t[used_samples_ * unit_size_ + 7];  /* FIXME +7 is workaround for #1284 */
+		if (!resized_chunk)
+			return;
 		memcpy(resized_chunk, current_chunk_, used_samples_ * unit_size_);
 
 		delete[] current_chunk_;
 		current_chunk_ = resized_chunk;
 
 		data_chunks_.back() = resized_chunk;
+		unused_samples_ = 0;
 	}
 }
 
